@@ -1059,20 +1059,21 @@ async function openSettings() {
   renderAvatarPreview(cfg.ai_avatar || "", cfg.ai_name || "AI");
   state.pendingAvatar = undefined;
 
+  $("s-tts-engine").value = cfg.tts_engine || "edge";
   $("s-tts-rate").value = cfg.tts_rate ?? 0;
-  loadTtsVoices(cfg.tts_voice || "");
+  loadTtsVoices(cfg.tts_engine || "edge", cfg.tts_voice || "");
   $("s-chat-font-size").value = String(cfg.chat_font_size || 14);
 
   settingsOverlay.classList.add("visible");
 }
 
-async function loadTtsVoices(selectedId = "") {
+async function loadTtsVoices(engine = "edge", selectedId = "") {
   const sel = $("s-tts-voice");
   if (!sel) return;
   try {
-    const str      = await bridgeCall("ttsVoices");
+    const str        = await bridgeCall("ttsVoices", engine);
     const { voices } = JSON.parse(str);
-    sel.innerHTML = '<option value="">系统默认</option>';
+    sel.innerHTML = '<option value="">默认</option>';
     (voices || []).forEach(v => {
       const opt = document.createElement("option");
       opt.value = v.id;
@@ -1095,8 +1096,9 @@ function saveSettings() {
     ai_avatar: state.pendingAvatar !== undefined
       ? state.pendingAvatar
       : (state.config.ai_avatar || ""),
-    tts_voice: $("s-tts-voice").value,
-    tts_rate:  parseInt($("s-tts-rate").value) || 0,
+    tts_engine: $("s-tts-engine").value,
+    tts_voice:  $("s-tts-voice").value,
+    tts_rate:   parseInt($("s-tts-rate").value) || 0,
     chat_font_size: parseInt($("s-chat-font-size").value) || 14,
     providers:      state.config.providers || {},
     provider_order: state.config.provider_order?.length

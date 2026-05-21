@@ -26,9 +26,9 @@
 
   <span id="titlebar-title">Red Studio</span>
 
-  <!-- 260521 Red 生成动画徽章：流式输出中显示鲸鱼 + 点点动画 -->
+  <!-- 260521 Red 生成动画徽章 //#260521 Red 换用 GitHub mona 猫猫动画 -->
   <div id="stream-badge">
-    <span class="stream-whale">🐋</span>
+    <img class="stream-cat" src="mona-loading.gif" alt="" />
     <span>生成中</span>
     <span class="stream-dots"></span>
   </div>
@@ -246,9 +246,16 @@
     <div class="settings-group">
       <div class="settings-group-title">朗读（TTS）</div>
       <div class="settings-row">
+        <label>引擎</label>
+        <select id="s-tts-engine" onchange="loadTtsVoices(this.value)">
+          <option value="edge">Edge TTS（在线·神经网络）</option>
+          <option value="sapi">Windows SAPI（离线）</option>
+        </select>
+      </div>
+      <div class="settings-row">
         <label>声线</label>
         <select id="s-tts-voice">
-          <option value="">系统默认</option>
+          <option value="">默认</option>
         </select>
       </div>
       <div class="settings-row">

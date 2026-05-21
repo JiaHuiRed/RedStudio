@@ -1576,7 +1576,7 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   260521 Red 生成动画徽章（标题栏右侧鲸鱼）
+   //#260521 Red 生成动画徽章（标题栏右侧 mona 猫猫）
 ═══════════════════════════════════════════════════════════ */
 #stream-badge {
   display: none;
@@ -1591,15 +1591,10 @@ body {
 }
 #stream-badge.active { display: flex; }
 
-.stream-whale {
-  display: inline-block;
-  font-size: 16px;
-  animation: whale-bounce 0.9s ease-in-out infinite alternate;
-  transform-origin: center bottom;
-}
-@keyframes whale-bounce {
-  from { transform: translateY(0)   rotate(-6deg); }
-  to   { transform: translateY(-5px) rotate(6deg); }
+.stream-cat {
+  width: 20px;
+  height: 20px;
+  image-rendering: pixelated;
 }
 
 /* CSS content animation for the dots */

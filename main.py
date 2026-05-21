@@ -1,5 +1,5 @@
 # author Red
-# @project  Red Studio  3.2.0
+# @project  Red Studio  3.2.1
 # @since    2026-05-14
 # @updated  2026-05-21
 # 260521 Red QWebChannel 重构：移除 Flask HTTP 层，改用 Qt 直接桥接
@@ -50,6 +50,38 @@ _EDGE_TO_HT = {
     9: 16,   # HTBOTTOMLEFT
     10: 17,  # HTBOTTOMRIGHT
 }
+
+# //#260521 Red Edge TTS 精选声线列表（无需联网查询，直接内置）
+_EDGE_TTS_VOICES = [
+    {"id": "zh-CN-XiaoxiaoNeural",         "name": "晓晓（普通话·女）温柔"},
+    {"id": "zh-CN-XiaoyiNeural",           "name": "晓伊（普通话·女）活泼"},
+    {"id": "zh-CN-XiaohanNeural",          "name": "晓涵（普通话·女）"},
+    {"id": "zh-CN-XiaomengNeural",         "name": "晓梦（普通话·女）"},
+    {"id": "zh-CN-XiaomoNeural",           "name": "晓墨（普通话·女）"},
+    {"id": "zh-CN-XiaoqiuNeural",          "name": "晓秋（普通话·女）"},
+    {"id": "zh-CN-XiaoruiNeural",          "name": "晓睿（普通话·女）"},
+    {"id": "zh-CN-XiaoshuangNeural",       "name": "晓双（普通话·女）"},
+    {"id": "zh-CN-XiaoxuanNeural",         "name": "晓萱（普通话·女）"},
+    {"id": "zh-CN-XiaoyanNeural",          "name": "晓颜（普通话·女）"},
+    {"id": "zh-CN-XiaoyouNeural",          "name": "晓悠（普通话·女）"},
+    {"id": "zh-CN-XiaochenNeural",         "name": "晓辰（普通话·女）"},
+    {"id": "zh-CN-YunxiNeural",            "name": "云希（普通话·男）年轻"},
+    {"id": "zh-CN-YunjianNeural",          "name": "云健（普通话·男）磁性"},
+    {"id": "zh-CN-YunyangNeural",          "name": "云扬（普通话·男）新闻"},
+    {"id": "zh-CN-YunfengNeural",          "name": "云枫（普通话·男）"},
+    {"id": "zh-CN-YunhaoNeural",           "name": "云皓（普通话·男）"},
+    {"id": "zh-CN-YunxiaNeural",           "name": "云夏（普通话·男）"},
+    {"id": "zh-CN-YunyeNeural",            "name": "云野（普通话·男）"},
+    {"id": "zh-CN-YunzeNeural",            "name": "云泽（普通话·男）"},
+    {"id": "zh-CN-liaoning-XiaobeiNeural", "name": "晓北（东北话·女）"},
+    {"id": "zh-CN-shaanxi-XiaoniNeural",   "name": "晓妮（陕西话·女）"},
+    {"id": "zh-TW-HsiaoChenNeural",        "name": "曉臻（台湾·女）"},
+    {"id": "zh-TW-HsiaoYuNeural",          "name": "曉雨（台湾·女）"},
+    {"id": "zh-TW-YunJheNeural",           "name": "雲哲（台湾·男）"},
+    {"id": "zh-HK-HiuMaanNeural",          "name": "曉曼（粤语·女）"},
+    {"id": "zh-HK-HiuGaaiNeural",          "name": "曉佳（粤语·女）"},
+    {"id": "zh-HK-WanLungNeural",          "name": "雲龍（粤语·男）"},
+]
 
 
 # ─── Bridge（JS ↔ Python 桥接） ────────────────────────────────────────────────
@@ -236,18 +268,22 @@ class Bridge(QObject):
     def ttsSpeak(self, text: str):
         with self._config_lock:
             c = self._config.copy()
+        engine   = c.get("tts_engine", "edge")
         voice_id = c.get("tts_voice", "")
         rate     = int(c.get("tts_rate", 0))
         self._tts_generation[0] += 1
-        self._tts_queue.put((text[:2000], self._tts_generation[0], voice_id, rate))
+        self._tts_queue.put((text[:2000], self._tts_generation[0], engine, voice_id, rate))
 
     @Slot()
     def ttsStop(self):
         # 260521 Red 递增版本号，TTS 线程检测到不匹配后立即停止
         self._tts_generation[0] += 1
 
-    @Slot(result=str)
-    def ttsVoices(self) -> str:
+    @Slot(str, result=str)
+    def ttsVoices(self, engine: str) -> str:
+        # //#260521 Red 按引擎返回声线列表：Edge TTS 返回内置列表，SAPI 查询系统声线
+        if engine == "edge":
+            return json.dumps({"voices": _EDGE_TTS_VOICES})
         try:
             import win32com.client
             v     = win32com.client.Dispatch("SAPI.SpVoice")
@@ -260,6 +296,40 @@ class Bridge(QObject):
         except Exception as e:
             return json.dumps({"voices": [], "error": str(e)})
 
+    def _edge_speak(self, text: str, gen: int, voice_id: str, rate: int):
+        """//#260521 Red 用 edge-tts 生成 MP3，通过 Windows MCI 播放，支持中途停止"""
+        import asyncio, os, tempfile, time
+        try:
+            import edge_tts
+        except ImportError:
+            return
+        voice    = voice_id or "zh-CN-XiaoxiaoNeural"
+        rate_str = f"{rate * 5:+d}%"
+        tmp = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
+        tmp_path = tmp.name
+        tmp.close()
+        try:
+            asyncio.run(edge_tts.Communicate(text, voice, rate=rate_str).save(tmp_path))
+            mci   = ctypes.windll.winmm.mciSendStringW
+            alias = "rds_tts"
+            mci(f'open "{tmp_path}" alias {alias}', None, 0, None)
+            mci(f'play {alias}', None, 0, None)
+            buf = ctypes.create_unicode_buffer(256)
+            while True:
+                if gen != self._tts_generation[0]:
+                    mci(f'stop {alias}', None, 0, None)
+                    break
+                mci(f'status {alias} mode', buf, 256, None)
+                if buf.value != 'playing':
+                    break
+                time.sleep(0.05)
+            mci(f'close {alias}', None, 0, None)
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
     def _tts_worker(self):
         """在独立线程中串行处理朗读请求；COM 对象必须在使用它的线程中创建"""
         try:
@@ -267,40 +337,48 @@ class Bridge(QObject):
             pythoncom.CoInitialize()
         except ImportError:
             pass
+
+        import time as _time
+
+        # 初始化 SAPI（备用引擎）
+        _sapi = None
         try:
             import win32com.client
-            import time as _time
-            voice = win32com.client.Dispatch("SAPI.SpVoice")
-            voice.Rate   = 0
-            voice.Volume = 100
+            _sapi = win32com.client.Dispatch("SAPI.SpVoice")
+            _sapi.Rate   = 0
+            _sapi.Volume = 100
         except Exception:
-            return  # SAPI 不可用则静默退出
+            pass
 
-        cur_voice_id = ""
+        cur_sapi_voice = ""
         while True:
-            text, gen, voice_id, rate = self._tts_queue.get()
+            text, gen, engine, voice_id, rate = self._tts_queue.get()
             if gen != self._tts_generation[0]:
-                continue  # 过期请求，跳过
+                continue
             try:
-                if voice_id != cur_voice_id:
-                    vlist = voice.GetVoices()
-                    for i in range(vlist.Count):
-                        v = vlist.Item(i)
-                        if v.Id == voice_id:
-                            voice.Voice = v
+                if engine == "edge":
+                    self._edge_speak(text, gen, voice_id, rate)
+                else:
+                    if _sapi is None:
+                        continue
+                    if voice_id != cur_sapi_voice:
+                        vlist = _sapi.GetVoices()
+                        for i in range(vlist.Count):
+                            v = vlist.Item(i)
+                            if v.Id == voice_id:
+                                _sapi.Voice = v
+                                break
+                        cur_sapi_voice = voice_id
+                    _sapi.Rate = max(-10, min(10, int(rate)))
+                    _sapi.Speak(text, 1)   # SVSFlagsAsync = 1
+                    while _sapi.Status.RunningState == 2:
+                        if gen != self._tts_generation[0]:
+                            _sapi.Speak("", 3)
                             break
-                    cur_voice_id = voice_id
-                voice.Rate = max(-10, min(10, int(rate)))
-                voice.Speak(text, 1)   # SVSFlagsAsync = 1
-                while voice.Status.RunningState == 2:  # 2 = 正在朗读
-                    if gen != self._tts_generation[0]:
-                        voice.Speak("", 3)  # 立即停止
-                        break
-                    _time.sleep(0.05)
+                        _time.sleep(0.05)
             except Exception:
                 pass
             finally:
-                # 260521 Red 朗读结束（正常或停止）后发信号，前端据此恢复按钮状态
                 if gen == self._tts_generation[0]:
                     self.ttsDone.emit()
 
