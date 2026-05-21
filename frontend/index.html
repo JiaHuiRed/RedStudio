@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Red Studio</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23007aff'/><path d='M30 65V35h12l8 20 8-20h12v30h-8V48l-9 22h-6l-9-22v17z' fill='white'/></svg>">
+  <link rel="stylesheet" href="style.css" />
+  <!-- 260521 Red highlight.js 代码高亮主题（本地离线） -->
+  <link rel="stylesheet" href="highlight-github-dark.min.css" />
+</head>
+<body>
+
+<!-- ─── macOS 风格全宽标题栏 ─────────────────────────────────── -->
+<!-- 260514 Red #titlebar 横跨整个窗口顶部，包含：
+     左侧：交通灯按钮（关闭/最小化/最大化）
+     中间：当前对话标题
+     titlebar 其余区域鼠标按下时触发窗口拖拽 -->
+<div id="titlebar">
+  <!-- 260514 Red 三个彩色圆圈，模拟 macOS 窗口控制按钮 -->
+  <div id="traffic-lights">
+    <button class="tl" id="btn-close"    title="关闭"></button>
+    <button class="tl" id="btn-minimize" title="最小化"></button>
+    <button class="tl" id="btn-maximize" title="最大化"></button>
+  </div>
+
+  <span id="titlebar-title">Red Studio</span>
+</div>
+
+<!-- ─── 主体（侧边栏 + 内容区） ──────────────────────────────── -->
+<div id="content">
+
+  <!-- ── 侧边栏 ─────────────────────────────────────────────── -->
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <div id="app-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        Red Studio
+      </div>
+
+      <!-- 供应商选择 -->
+      <div id="provider-select-wrap">
+        <select id="provider-select"></select>
+      </div>
+
+      <!-- 260515 Red 模式切换 pill：对话 / 故事 -->
+      <div id="mode-tabs">
+        <button class="mode-tab active" data-mode="chat">对话</button>
+        <button class="mode-tab" data-mode="story">故事</button>
+      </div>
+    </div>
+
+    <!-- 模型选择 -->
+    <div id="model-section">
+      <div class="section-label">
+        <span><span class="status-dot" id="provider-status"></span>模型</span>
+        <!-- 260514 Red 刷新按钮，重新拉取当前 provider 的模型列表 -->
+        <button id="refresh-models-btn" class="model-refresh-btn" title="刷新模型列表">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+        </button>
+      </div>
+      <select id="model-select">
+        <option value="">-- 加载中 --</option>
+      </select>
+    </div>
+
+    <!-- 新建对话 -->
+    <button id="new-chat-btn">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+      新建对话
+    </button>
+
+    <!-- 历史搜索 -->
+    <div id="history-search-wrap">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input id="history-search" type="text" placeholder="搜索历史…" autocomplete="off" />
+    </div>
+
+    <!-- 历史列表 -->
+    <div id="chat-history">
+      <div class="history-section-label">历史对话</div>
+    </div>
+
+    <!-- 今日 Token 内嵌面板 -->
+    <div id="stats-inline-panel">
+      <div id="stats-inline-header">
+        <span class="stats-inline-title">今日 Token</span>
+        <span id="stats-inline-date"></span>
+      </div>
+      <div id="stats-inline-body"></div>
+    </div>
+
+    <!-- 底部工具 -->
+    <div id="sidebar-footer">
+      <button class="icon-btn" id="prompts-btn" title="提示词库">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+        </svg>
+      </button>
+      <button class="icon-btn" id="theme-btn" title="切换主题（亮色 / 护眼米 / 护眼绿 / 深蓝 / 纯黑）">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+      <!-- 260515 Red 导出当前对话为 Markdown 文件 -->
+      <button class="icon-btn" id="export-btn" title="导出对话">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+      </button>
+      <button class="icon-btn" id="settings-btn" title="设置">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ── 主内容区 ──────────────────────────────────────────── -->
+  <div id="main">
+    <!-- 260515 Red 系统提示词栏：可折叠，每条对话独立设置 -->
+    <div id="sys-prompt-bar">
+      <button id="sys-prompt-toggle">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6 6 6 0 0 1-3 5.197V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.803A6 6 0 0 1 6 9a6 6 0 0 1 6-6z"/>
+        </svg>
+        <span id="sys-prompt-label">系统提示词</span>
+        <svg class="sys-prompt-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+      <div id="sys-prompt-content">
+        <textarea id="sys-prompt-input" rows="3" placeholder="输入系统提示词（可选）…"></textarea>
+      </div>
+    </div>
+
+    <!-- 消息区 / 欢迎页 -->
+    <div id="messages">
+      <div id="welcome">
+        <div class="welcome-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+        </div>
+        <h2>开始对话</h2>
+        <p>选择左侧的 Provider 和模型，然后在下方输入框发起对话。</p>
+      </div>
+    </div>
+
+    <!-- 输入区域 -->
+    <div id="input-area">
+      <div id="input-card">
+        <textarea id="user-input" placeholder="输入消息…" rows="1"></textarea>
+        <!-- 260514 Red 思考模式切换按钮，激活时紫色高亮，向 API 传递 enable_thinking -->
+        <button id="think-btn" title="思考模式">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6 6 6 0 0 1-3 5.197V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.803A6 6 0 0 1 6 9a6 6 0 0 1 6-6z"/>
+            <line x1="12" y1="20" x2="12" y2="17"/>
+          </svg>
+        </button>
+        <button id="send-btn" title="发送 (Enter)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
+          </svg>
+        </button>
+      </div>
+      <div id="input-footer">
+        <span id="input-hint">Enter 发送 · Shift+Enter 换行</span>
+        <span id="think-status">思考模式已开启</span>
+        <span id="token-total" title="当前对话累计 token 消耗"></span>
+        <button id="stop-btn">停止生成</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- #content -->
+
+<!-- ─── 设置面板 ────────────────────────────────────────────── -->
+<div id="settings-overlay">
+  <div id="settings-panel">
+    <h2>设置</h2>
+    <div class="settings-group">
+      <div class="settings-group-title">供应商</div>
+      <div id="s-provider-list"></div>
+      <button class="btn-secondary" id="s-add-provider-btn" style="margin-top:8px;width:100%">+ 添加供应商</button>
+      <div id="s-provider-form" style="display:none">
+        <div id="s-provider-form-title"></div>
+        <div class="settings-row"><label>名称</label><input type="text" id="spe-name" placeholder="如：豆包" maxlength="20" /></div>
+        <div class="settings-row"><label>类型</label>
+          <select id="spe-type">
+            <option value="openai-compat">OpenAI 兼容（GLM / 豆包 / Qwen 等）</option>
+            <option value="ollama">Ollama（本地）</option>
+          </select>
+        </div>
+        <div class="settings-row"><label>Base URL</label><input type="text" id="spe-url" placeholder="https://..." /></div>
+        <div class="settings-row" id="spe-key-row"><label>API Key</label><input type="password" id="spe-key" placeholder="sk-..." /></div>
+        <div class="settings-actions">
+          <button class="btn-secondary" id="spe-cancel">取消</button>
+          <button class="btn-primary" id="spe-save">保存</button>
+        </div>
+      </div>
+    </div>
+    <div class="settings-group">
+      <div class="settings-group-title">生成参数</div>
+      <div class="settings-row"><label>Temperature（0 ~ 2）</label><input type="number" id="s-temperature" min="0" max="2" step="0.1" /></div>
+      <div class="settings-row"><label>Max Tokens</label><input type="number" id="s-max-tokens" min="256" max="32768" step="256" /></div>
+      <div class="settings-row"><label>Top P（0 ~ 1）</label><input type="number" id="s-top-p" min="0" max="1" step="0.05" /></div>
+      <!-- 260514 Red Frequency / Presence Penalty 仅 OpenAI 兼容接口生效，Ollama 不传 -->
+      <div class="settings-row"><label>Frequency Penalty（-2 ~ 2，仅 OpenAI / DeepSeek）</label><input type="number" id="s-frequency-penalty" min="-2" max="2" step="0.1" /></div>
+      <div class="settings-row"><label>Presence Penalty（-2 ~ 2，仅 OpenAI / DeepSeek）</label><input type="number" id="s-presence-penalty" min="-2" max="2" step="0.1" /></div>
+    </div>
+    <div class="settings-group">
+      <div class="settings-group-title">AI 角色</div>
+      <div class="settings-row">
+        <label>名称</label>
+        <input type="text" id="s-ai-name" placeholder="AI" maxlength="20" />
+      </div>
+      <div class="settings-row">
+        <label>头像</label>
+        <!-- 260514 Red 头像预览圆圈，点击触发文件选择 -->
+        <div id="s-avatar-preview" class="avatar-preview"></div>
+        <input type="file" id="s-avatar-input" accept="image/*" style="display:none" />
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button type="button" class="btn-secondary" id="s-avatar-btn">选择图片</button>
+          <button type="button" class="btn-secondary" id="s-avatar-clear">移除头像</button>
+        </div>
+      </div>
+    </div>
+    <div class="settings-group">
+      <div class="settings-group-title">朗读（TTS）</div>
+      <div class="settings-row">
+        <label>声线</label>
+        <select id="s-tts-voice">
+          <option value="">系统默认</option>
+        </select>
+      </div>
+      <div class="settings-row">
+        <label>语速（-10 最慢 · 0 正常 · 10 最快）</label>
+        <input type="number" id="s-tts-rate" min="-10" max="10" step="1" value="0" />
+      </div>
+    </div>
+    <div class="settings-group">
+      <div class="settings-group-title">界面</div>
+      <div class="settings-row">
+        <label>聊天字体大小</label>
+        <select id="s-chat-font-size">
+          <option value="13">小（13px）</option>
+          <option value="14" selected>默认（14px）</option>
+          <option value="15">大（15px）</option>
+          <option value="16">超大（16px）</option>
+        </select>
+      </div>
+    </div>
+    <div class="settings-actions">
+      <button class="btn-secondary" id="settings-cancel">取消</button>
+      <button class="btn-primary" id="settings-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 260515 Red 提示词库面板 -->
+<div id="prompts-overlay">
+  <div id="prompts-panel">
+    <div id="prompts-panel-header">
+      <h2>提示词库</h2>
+      <button class="btn-secondary" id="prompts-add-btn">+ 新建</button>
+    </div>
+    <div id="prompts-list"></div>
+    <div id="prompts-form">
+      <div class="settings-row">
+        <label>标题（可选）</label>
+        <input type="text" id="prompt-title-input" placeholder="如：翻译助手" maxlength="40" />
+      </div>
+      <div class="settings-row">
+        <label>提示词内容</label>
+        <textarea id="prompt-content-input" rows="5" placeholder="输入提示词…"></textarea>
+      </div>
+      <div class="settings-actions">
+        <button class="btn-secondary" id="prompt-form-cancel">取消</button>
+        <button class="btn-primary" id="prompt-form-save">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- 260515 Red 故事模式角色头像上传（隐藏，由 JS 动态触发） -->
+<input type="file" id="char-avatar-input" accept="image/*" style="display:none" />
+
+<!-- 260521 Red marked.js / highlight.js 本地离线版 -->
+<script src="marked.min.js"></script>
+<script src="highlight.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
