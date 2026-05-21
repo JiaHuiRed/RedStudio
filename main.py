@@ -1,5 +1,5 @@
 # author Red
-# @project  Red Studio  2.0.0
+# @project  Red Studio  3.2.0
 # @since    2026-05-14
 # @updated  2026-05-21
 # 260521 Red QWebChannel 重构：移除 Flask HTTP 层，改用 Qt 直接桥接
@@ -327,6 +327,23 @@ class Bridge(QObject):
     def startResize(self, edge: int):
         self._window._start_system_resize(edge)
 
+    # ── 窗口几何记忆 ───────────────────────────────────────────────────────────
+
+    @Slot()
+    def saveWindowGeometry(self):
+        # 260521 Red 退出前将窗口位置和尺寸写入配置，下次启动时恢复
+        if self._window.isMaximized():
+            return  # 最大化时不保存，保留上次正常尺寸
+        geo = self._window.geometry()
+        with self._config_lock:
+            self._config.update({
+                "window_x": geo.x(),
+                "window_y": geo.y(),
+                "window_w": geo.width(),
+                "window_h": geo.height(),
+            })
+            cfg.save_config(self._config)
+
 
 # ─── 主窗口类 ──────────────────────────────────────────────────────────────────
 
@@ -353,10 +370,44 @@ class MainWindow(QWebEngineView):
         else:
             self.showMaximized()
 
+    def nativeEvent(self, eventType, message):
+        #260521 Red WM_NCHITTEST：原生处理四边/顶角缩放，解决上下边和顶角无法拖拽缩放的问题
+        if eventType == b"windows_generic_MSG":
+            msg = ctypes.wintypes.MSG.from_address(int(message))
+            if msg.message == 0x0084:  # WM_NCHITTEST
+                pt = ctypes.wintypes.POINT()
+                ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
+                geo = self.frameGeometry()
+                x = pt.x - geo.x()
+                y = pt.y - geo.y()
+                w = geo.width()
+                h = geo.height()
+                b = 8  # 缩放边框像素
+                left   = x < b
+                right  = x > w - b
+                top    = y < b
+                bottom = y > h - b
+                if top    and left:  return True, 13  # HTTOPLEFT
+                if top    and right: return True, 14  # HTTOPRIGHT
+                if bottom and left:  return True, 16  # HTBOTTOMLEFT
+                if bottom and right: return True, 17  # HTBOTTOMRIGHT
+                if top:    return True, 12  # HTTOP
+                if bottom: return True, 15  # HTBOTTOM
+                if left:   return True, 10  # HTLEFT
+                if right:  return True, 11  # HTRIGHT
+                # 标题栏拖移（x<88 为交通灯区域，交给 JS 处理点击）
+                if y < 48 and x >= 88:
+                    return True, 2  # HTCAPTION
+        return super().nativeEvent(eventType, message)
+
     def _start_system_move(self):
-        handle = self.windowHandle()
-        if handle:
-            handle.startSystemMove()
+        #260521 Red 使用 Win32 PostMessage 触发移动，避免 QWebEngineView 侧边栏闪烁
+        hwnd  = int(self.winId())
+        pt    = ctypes.wintypes.POINT()
+        ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
+        lparam = ctypes.c_int32((pt.y << 16) | (pt.x & 0xFFFF)).value
+        ctypes.windll.user32.ReleaseCapture()
+        ctypes.windll.user32.PostMessageW(hwnd, _WM_NCLBUTTONDOWN, 2, lparam)  # HTCAPTION=2
 
     def _start_system_resize(self, edge: int):
         # 使用 Win32 WM_NCLBUTTONDOWN 直接触发边缘缩放
@@ -397,12 +448,30 @@ def main():
     # 260521 Red 直接加载本地 HTML 文件，无需 Flask 静态服务
     window.load(QUrl.fromLocalFile(os.path.join(FRONTEND_DIR, "index.html")))
 
-    # 260514 Red 启动时居中显示
+    # 260521 Red 从配置恢复窗口几何，默认 1440×1080
     screen = QGuiApplication.primaryScreen().availableGeometry()
-    window.move(
-        (screen.width()  - window.width())  // 2,
-        (screen.height() - window.height()) // 2,
-    )
+    with bridge._config_lock:
+        c = bridge._config
+        saved_x = c.get("window_x")
+        saved_y = c.get("window_y")
+        saved_w = c.get("window_w", 1000)
+        saved_h = c.get("window_h", 800)
+
+    window.resize(int(saved_w), int(saved_h))
+
+    if saved_x is not None and saved_y is not None:
+        # 确保窗口在当前屏幕范围内
+        x = max(0, min(int(saved_x), screen.width()  - 120))
+        y = max(0, min(int(saved_y), screen.height() - 80))
+        window.move(x, y)
+    else:
+        window.move(
+            (screen.width()  - window.width())  // 2,
+            (screen.height() - window.height()) // 2,
+        )
+
+    # 260521 Red 退出时保存窗口几何
+    app.aboutToQuit.connect(bridge.saveWindowGeometry)
 
     window.show()
     sys.exit(app.exec())

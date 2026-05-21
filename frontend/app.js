@@ -41,7 +41,58 @@ function renderMarkdownBubble(bubble, text) {
   attachCopyButtons(bubble);
 }
 
-// 260515 Red 导出当前对话为 Markdown 文件（纯前端 Blob 下载，无需服务器）
+// ─── 懒加载 ──────────────────────────────────────────────────────────────────
+// 260521 Red 每次最多渲染最后 LAZY_LOAD_COUNT 条消息，超出部分通过按钮按需加载
+const LAZY_LOAD_COUNT = 20;
+
+// 260521 Red 清空消息区并渲染 messages（超出懒加载阈值时插入"加载更早"按钮）
+function renderMessageList(messages) {
+  messagesEl.innerHTML = "";
+  if (messages.length === 0) {
+    messagesEl.appendChild(makeWelcome());
+    return;
+  }
+  const start = Math.max(0, messages.length - LAZY_LOAD_COUNT);
+  if (start > 0) {
+    const btn = document.createElement("button");
+    btn.className = "load-earlier-btn";
+    btn.textContent = `↑ 加载更早的 ${start} 条消息`;
+    btn.onclick = () => {
+      // 记录当前滚动高度，加载后保持视口位置
+      const prevHeight = messagesEl.scrollHeight;
+      btn.remove();
+      // 将早期消息插入到现有消息之前
+      const frag = document.createDocumentFragment();
+      for (let i = 0; i < start; i++) {
+        const m = messages[i];
+        // 借用 appendMessage 但插入到最前——临时附加到 frag
+        const placeholder = document.createElement("div");
+        frag.appendChild(placeholder);
+      }
+      // 重新全量渲染（最简单可靠）
+      messagesEl.innerHTML = "";
+      messages.forEach((m, i) => appendMessage(m.role, m.content, i));
+      messagesEl.scrollTop = messagesEl.scrollHeight - prevHeight;
+    };
+    messagesEl.appendChild(btn);
+    messages.slice(start).forEach((m, i) => appendMessage(m.role, m.content, start + i));
+  } else {
+    messages.forEach((m, i) => appendMessage(m.role, m.content, i));
+  }
+}
+
+// 260521 Red 流式 Markdown 节流渲染：600ms 后执行一次 Markdown 渲染，减少割裂感
+function _scheduleMarkdownRender(sc) {
+  if (sc.renderTimer) return;
+  sc.renderTimer = setTimeout(() => {
+    sc.renderTimer = null;
+    if (state.streamCtx === sc && sc.ctx.fullContent) {
+      renderMarkdownBubble(sc.bubble, sc.ctx.fullContent);
+    }
+  }, 600);
+}
+
+// 260521 Red 导出当前对话为 Markdown 文件（纯前端 Blob 下载，无需服务器）
 function exportChat() {
   if (state.messages.length === 0) return;
   const title = state.messages.find(m => m.role === "user")?.content?.slice(0, 30) || "对话";
@@ -391,6 +442,8 @@ function streamReply(model) {
   state.isStreaming = true;
   sendBtn.disabled = true;
   stopBtn.classList.add("visible");
+  // 260521 Red 显示鲸鱼生成动画
+  $("stream-badge")?.classList.add("active");
 
   // 260514 Red 创建 AI 消息行：[头像] + [内容列（思考块/气泡/token标注）]
   const row = document.createElement("div");
@@ -417,7 +470,7 @@ function streamReply(model) {
   scrollToBottom();
 
   // 260521 Red 保存流式上下文，供信号处理函数访问
-  state.streamCtx = { bubble, content, avatarEl, ctx, usageData: null };
+  state.streamCtx = { bubble, content, avatarEl, ctx, usageData: null, renderTimer: null };
 
   // 260521 Red 构造请求并调用桥接槽
   const sysPrompt  = state.currentSystemPrompt.trim();
@@ -473,6 +526,15 @@ function onChatDone() {
   state.streamCtx = null;
 
   const { bubble, content, avatarEl, ctx } = sc;
+
+  // 260521 Red 取消节流定时器（任务1：停止后仍确保 Markdown 最终渲染）
+  if (sc.renderTimer) {
+    clearTimeout(sc.renderTimer);
+    sc.renderTimer = null;
+  }
+
+  // 260521 Red 隐藏鲸鱼生成动画
+  $("stream-badge")?.classList.remove("active");
 
   bubble.classList.remove("streaming");
 
@@ -559,12 +621,14 @@ function processContentDelta(text, ctx, container, bubble) {
         const seg = text.slice(i);
         ctx.fullContent += seg;
         bubble.textContent = ctx.fullContent;   // 260521 Red 纯文本，快速
+        if (state.streamCtx) _scheduleMarkdownRender(state.streamCtx);  // 260521 Red 节流 MD 渲染
         i = text.length;
       } else {
         if (startIdx > i) {
           const before = text.slice(i, startIdx);
           ctx.fullContent += before;
           bubble.textContent = ctx.fullContent;
+          if (state.streamCtx) _scheduleMarkdownRender(state.streamCtx);  // 260521 Red 节流 MD 渲染
         }
         ctx.inThinkTag = true;
         ctx.thinkBuffer = "";
@@ -834,12 +898,13 @@ function makeWelcome() {
 function editUserMessage(msgIndex, content) {
   if (state.isStreaming || msgIndex < 0) return;
   state.messages = state.messages.slice(0, msgIndex);
-  messagesEl.innerHTML = "";
   if (state.messages.length === 0) {
+    messagesEl.innerHTML = "";
     messagesEl.appendChild(makeWelcome());
     titlebarTitle.textContent = "Red Studio";
   } else {
-    state.messages.forEach((m, i) => appendMessage(m.role, m.content, i));
+    // 260521 Red 懒加载：重渲染时同样只显示最近消息
+    renderMessageList(state.messages);
   }
   userInputEl.value = content;
   autoResizeTextarea();
@@ -963,8 +1028,8 @@ function loadChat(chat) {
   $("sys-prompt-input").value = state.currentSystemPrompt;
   $("sys-prompt-bar").classList.remove("open");
 
-  messagesEl.innerHTML = "";
-  chat.messages.forEach((m, i) => appendMessage(m.role, m.content, i));
+  // 260521 Red 懒加载：只渲染最后 LAZY_LOAD_COUNT 条，其余按需加载
+  renderMessageList(chat.messages);
   titlebarTitle.textContent = chat.title.slice(0, 24);
 
   const sel = $("provider-select");
@@ -1302,7 +1367,7 @@ function windowCmd(action) {
   }
 }
 
-const RESIZE_MARGIN = 8;
+const RESIZE_MARGIN = 12;
 function getResizeEdge(x, y) {
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -1327,7 +1392,7 @@ function setupWindowResize() {
     const c = edgeCursor(getResizeEdge(e.clientX, e.clientY));
     if (c !== lastCursor) {
       lastCursor = c;
-      document.body.style.cursor = c || "";
+      document.documentElement.style.cursor = c || "";
     }
   });
   document.addEventListener("mousedown", (e) => {

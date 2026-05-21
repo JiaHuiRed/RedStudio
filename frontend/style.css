@@ -185,9 +185,9 @@ body {
 }
 
 /* ── 滚动条 ──────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 2px; }
 
 /* ═══════════════════════════════════════════════════════════
    macOS 风格全宽标题栏
@@ -268,13 +268,13 @@ body {
   top: 0;
   left: 0;
   bottom: 0;
-  width: 236px;
+  width: 220px;
   z-index: 10;
   background: var(--sidebar-glass-bg);
   backdrop-filter: blur(20px) saturate(1.6);
   -webkit-backdrop-filter: blur(20px) saturate(1.6);
   border-right: 1px solid var(--sidebar-border);
-  box-shadow: 2px 0 16px rgba(0,0,0,0.08);
+  box-shadow: 2px 0 10px rgba(0,0,0,0.05);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -419,10 +419,10 @@ body {
   transition: color 0.18s;
 }
 .history-item {
-  padding: 7px 9px;
-  border-radius: var(--radius-sm);
+  padding: 6px 9px;
+  border-radius: 7px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -445,8 +445,8 @@ body {
 }
 .icon-btn {
   flex: 1;
-  padding: 7px;
-  border-radius: var(--radius-sm);
+  padding: 6px;
+  border-radius: 7px;
   border: 1px solid var(--input-border);
   background: transparent;
   color: var(--text-secondary);
@@ -455,13 +455,14 @@ body {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-family: var(--font);
   transition: var(--transition);
 }
 .icon-btn:hover {
   background: var(--hover-bg);
   color: var(--text-primary);
+  border-color: var(--text-tertiary);
 }
 
 /* ─── Token 内嵌统计面板（侧边栏） ──────────────────────────────────────────── */
@@ -582,7 +583,7 @@ body {
   overflow: hidden;
   background: var(--main-bg);
   transition: var(--transition);
-  margin-left: 236px;
+  margin-left: 220px;
 }
 
 /* 260514 Red #main 不再有独立标题栏，顶部由全宽 #titlebar 承担 */
@@ -591,10 +592,10 @@ body {
 #messages {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 0 16px;
+  padding: 24px 0 16px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 /* 欢迎页 */
@@ -624,8 +625,8 @@ body {
 /* 消息行 */
 .msg-row {
   display: flex;
-  padding: 5px 20px;
-  animation: fadeSlideIn 0.2s ease;
+  padding: 4px 24px;
+  animation: fadeSlideIn 0.18s ease;
 }
 @keyframes fadeSlideIn {
   from { opacity: 0; transform: translateY(8px); }
@@ -668,10 +669,10 @@ body {
 
 .msg-bubble {
   max-width: 72%;
-  padding: 11px 15px;
+  padding: 10px 14px;
   border-radius: var(--radius-xl);
   font-size: var(--chat-font-size);
-  line-height: 1.58;
+  line-height: 1.6;
   word-break: break-word;
   white-space: pre-wrap;
   user-select: text;
@@ -688,8 +689,8 @@ body {
   background: var(--bubble-ai);
   color: var(--bubble-ai-text);
   border: 1px solid var(--bubble-ai-border);
-  border-bottom-left-radius: 5px;
-  box-shadow: var(--shadow-xs);
+  border-bottom-left-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
 }
 
 /* 流式光标 */
@@ -791,7 +792,7 @@ body {
    输入区域
 ═══════════════════════════════════════════════════════════ */
 #input-area {
-  padding: 10px 18px 14px;
+  padding: 8px 20px 16px;
   flex-shrink: 0;
   background: var(--main-bg);
   transition: var(--transition);
@@ -801,17 +802,17 @@ body {
 #input-card {
   background: var(--input-bg);
   border: 1px solid var(--input-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
   display: flex;
   align-items: flex-end;
   gap: 6px;
-  padding: 9px 9px 9px 13px;
+  padding: 10px 10px 10px 14px;
   transition: border-color 0.15s, box-shadow 0.15s, background 0.18s;
 }
 #input-card:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(0,122,255,0.11), var(--shadow-sm);
+  box-shadow: 0 0 0 3px rgba(0,122,255,0.10), 0 2px 8px rgba(0,0,0,0.07);
 }
 
 #user-input {
@@ -1573,3 +1574,62 @@ body {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(0,122,255,0.12);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   260521 Red 生成动画徽章（标题栏右侧鲸鱼）
+═══════════════════════════════════════════════════════════ */
+#stream-badge {
+  display: none;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  margin-right: 14px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  user-select: none;
+  pointer-events: none;
+}
+#stream-badge.active { display: flex; }
+
+.stream-whale {
+  display: inline-block;
+  font-size: 16px;
+  animation: whale-bounce 0.9s ease-in-out infinite alternate;
+  transform-origin: center bottom;
+}
+@keyframes whale-bounce {
+  from { transform: translateY(0)   rotate(-6deg); }
+  to   { transform: translateY(-5px) rotate(6deg); }
+}
+
+/* CSS content animation for the dots */
+.stream-dots::after {
+  content: "";
+  animation: dots-cycle 1.2s steps(4, end) infinite;
+}
+@keyframes dots-cycle {
+  0%   { content: ""; }
+  25%  { content: "."; }
+  50%  { content: ".."; }
+  75%  { content: "..."; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   260521 Red 懒加载：加载更早消息按钮
+═══════════════════════════════════════════════════════════ */
+.load-earlier-btn {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 8px 16px 4px;
+  padding: 7px;
+  border: 1px dashed var(--input-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-family: var(--font);
+  cursor: pointer;
+  text-align: center;
+  transition: color 0.15s, border-color 0.15s;
+}
+.load-earlier-btn:hover { color: var(--accent); border-color: var(--accent); }
