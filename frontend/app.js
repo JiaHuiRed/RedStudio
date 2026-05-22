@@ -278,10 +278,12 @@ const state = {
   thinkingEnabled: false,
   // 260514 Red pendingAvatar: 设置面板中待保存的头像 data URL
   pendingAvatar: undefined,
-  // 260515 Red 故事模式
-  mode: "chat",             // "chat" | "story"
+  // 260515 Red 故事模式（角色扮演）
+  mode: "chat",             // "chat"=故事/角色扮演 | "novel"=小说
   currentSystemPrompt: "",  // 当前对话的系统提示词
   storyCharacters: {},      // { 角色名: { color, avatar } }
+  storyCharCardName: "",    //#260522 Red 当前选中的故事模式角色卡名称
+  novelHeroine: "",         //#260522 Red 当前选中的小说模式女明星名称
   // 260515 Red Token 统计：当前对话累计消耗
   sessionTokens: { prompt: 0, completion: 0 },
   // 260515 Red 提示词库：[{ title, content }]
@@ -318,8 +320,11 @@ async function init() {
   const lastProvider = cfg.last_provider || providerOrder[0] || "ollama";
   switchProvider(lastProvider, false);
 
-  // 260515 Red 恢复上次的模式（对话/故事）
-  switchMode(cfg.last_mode || "chat", false);
+  //#260522 Red 恢复上次的模式，兼容旧值 "story"→"novel"
+  const _lastMode = cfg.last_mode === "story" ? "novel" : (cfg.last_mode || "chat");
+  switchMode(_lastMode, false);
+  populateHeroineSelect();
+  populateStoryCharSelect();
 
   // 从桥接加载历史对话
   await loadChatHistory();
@@ -472,8 +477,12 @@ function streamReply(model) {
   // 260521 Red 保存流式上下文，供信号处理函数访问
   state.streamCtx = { bubble, content, avatarEl, ctx, usageData: null, renderTimer: null };
 
-  // 260521 Red 构造请求并调用桥接槽
-  const sysPrompt  = state.currentSystemPrompt.trim();
+  //#260522 Red 构造请求：小说模式自动构建，故事模式注入角色卡，其余使用手动输入
+  const sysPrompt = state.mode === "novel"
+    ? buildNovelSystemPrompt()
+    : state.mode === "chat"
+      ? buildChatSystemPrompt()
+      : state.currentSystemPrompt.trim();
   const apiMessages = sysPrompt
     ? [{ role: "system", content: sysPrompt }, ...state.messages]
     : state.messages;
@@ -554,8 +563,8 @@ function onChatDone() {
     bubble.textContent = "（已停止）";
   }
 
-  // 260515 Red 故事模式：解析角色名、渲染角色头像、添加选项按钮
-  if (state.mode === "story" && ctx.fullContent) {
+  //#260522 Red 故事模式（角色扮演）：解析角色名、渲染角色头像、添加选项按钮
+  if (state.mode === "chat" && ctx.fullContent) {
     const { charName, mainText, choices } = parseStoryContent(ctx.fullContent);
 
     if (charName) {
@@ -591,6 +600,11 @@ function onChatDone() {
       });
       content.appendChild(choicesDiv);
     }
+  }
+
+  //#260522 Red 小说模式：解析章回内容，渲染章回分隔线 + 选项按钮
+  if (state.mode === "novel" && ctx.fullContent) {
+    renderNovelChapter(content, bubble, ctx.fullContent);
   }
 
   // 260514 Red 始终渲染 token 标注行
@@ -755,9 +769,11 @@ function openCharAvatarUpload(name) {
   input.click();
 }
 
-// 260515 Red 模式切换：对话 ↔ 故事
+// 260515 Red 模式切换：故事 ↔ 小说
 function switchMode(mode, save = true) {
   state.mode = mode;
+  //#260522 Red 设置 body 和 #content 上的 data-mode，CSS 用 body[data-mode] 控制侧边栏区块显示
+  document.body.dataset.mode = mode;
   document.getElementById("content").dataset.mode = mode;
 
   document.querySelectorAll(".mode-tab").forEach(tab => {
@@ -766,8 +782,10 @@ function switchMode(mode, save = true) {
 
   const bar   = $("sys-prompt-bar");
   const input = $("sys-prompt-input");
-  if (bar)   bar.classList.toggle("story-mode", mode === "story");
-  if (input) input.placeholder = mode === "story"
+  if (bar)   bar.classList.toggle("novel-mode", mode === "novel");
+  if (input) input.placeholder = mode === "novel"
+    ? "小说模式（系统提示词自动构建，通常无需手动填写）…"
+    : mode === "chat"
     ? "设置故事世界观、角色规则、叙事风格…"
     : "输入系统提示词（可选）…";
 
@@ -824,7 +842,8 @@ function appendMessage(role, content, msgIndex = -1) {
     const contentDiv = document.createElement("div");
     contentDiv.className = "msg-content";
 
-    if (state.mode === "story") {
+    //#260522 Red 历史消息重放：故事模式解析角色卡，小说模式解析选项
+    if (state.mode === "chat") {
       const { charName, mainText, choices } = parseStoryContent(content);
 
       const av = makeAvatar();
@@ -855,6 +874,11 @@ function appendMessage(role, content, msgIndex = -1) {
       }
       if (content) addMessageActions(contentDiv, () => content);
       row.appendChild(av);
+    } else if (state.mode === "novel") {
+      contentDiv.appendChild(bubble);        // bubble 先入 DOM，choices 追加在后
+      renderNovelChapter(contentDiv, bubble, content);
+      if (content) addMessageActions(contentDiv, () => content);
+      row.appendChild(makeAvatar());
     } else {
       renderMarkdownBubble(bubble, content);
       row.appendChild(makeAvatar());
@@ -941,10 +965,12 @@ function saveChatHistory() {
     : null;
 
   if (existing) {
-    existing.systemPrompt    = state.currentSystemPrompt;
-    existing.storyCharacters = JSON.parse(JSON.stringify(state.storyCharacters));
-    existing.mode            = state.mode;
-    existing.sessionTokens   = { ...state.sessionTokens };
+    existing.systemPrompt      = state.currentSystemPrompt;
+    existing.storyCharacters   = JSON.parse(JSON.stringify(state.storyCharacters));
+    existing.mode              = state.mode;
+    existing.sessionTokens     = { ...state.sessionTokens };
+    existing.novelHeroine      = state.novelHeroine;
+    existing.storyCharCardName = state.storyCharCardName;
   } else {
     const newId = state.nextChatId++;
     state.currentChatId = newId;
@@ -953,11 +979,13 @@ function saveChatHistory() {
       title,
       provider:        state.provider,
       model:           state.model,
-      messages:        state.messages,
-      mode:            state.mode,
-      systemPrompt:    state.currentSystemPrompt,
-      storyCharacters: JSON.parse(JSON.stringify(state.storyCharacters)),
-      sessionTokens:   { ...state.sessionTokens }
+      messages:          state.messages,
+      mode:              state.mode,
+      systemPrompt:      state.currentSystemPrompt,
+      storyCharacters:   JSON.parse(JSON.stringify(state.storyCharacters)),
+      sessionTokens:     { ...state.sessionTokens },
+      novelHeroine:      state.novelHeroine,
+      storyCharCardName: state.storyCharCardName
     });
   }
 
@@ -1023,8 +1051,13 @@ function loadChat(chat) {
   state.currentSystemPrompt = chat.systemPrompt    || "";
   state.storyCharacters     = chat.storyCharacters || {};
   state.sessionTokens       = chat.sessionTokens   || { prompt: 0, completion: 0 };
+  //#260522 Red 恢复小说模式女明星选择 + 故事模式角色卡选择
+  state.novelHeroine        = chat.novelHeroine      || "";
+  state.storyCharCardName   = chat.storyCharCardName || "";
   updateTokenTotal();
   switchMode(chat.mode || "chat", false);
+  populateHeroineSelect();
+  populateStoryCharSelect();
   $("sys-prompt-input").value = state.currentSystemPrompt;
   $("sys-prompt-bar").classList.remove("open");
 
@@ -1063,6 +1096,18 @@ async function openSettings() {
   $("s-tts-rate").value = cfg.tts_rate ?? 0;
   loadTtsVoices(cfg.tts_engine || "edge", cfg.tts_voice || "");
   $("s-chat-font-size").value = String(cfg.chat_font_size || 14);
+
+  //#260522 Red 小说模式设置：男主角卡 + 小说提示词模板
+  $("s-male-name").value       = cfg.novel_male_name       || "";
+  $("s-male-birth").value      = cfg.novel_male_birth      || "";
+  $("s-male-hometown").value   = cfg.novel_male_hometown   || "";
+  $("s-male-height").value     = cfg.novel_male_height     || "";
+  $("s-male-education").value  = cfg.novel_male_education  || "";
+  $("s-male-appearance").value = cfg.novel_male_appearance || "";
+  $("s-male-hobbies").value    = cfg.novel_male_hobbies    || "";
+  $("s-male-friends").value    = cfg.novel_male_friends    || "";
+  $("s-male-career").value     = cfg.novel_male_career     || "";
+  $("s-novel-template").value  = cfg.novel_prompt_template || "";
 
   settingsOverlay.classList.add("visible");
 }
@@ -1103,7 +1148,20 @@ function saveSettings() {
     providers:      state.config.providers || {},
     provider_order: state.config.provider_order?.length
       ? state.config.provider_order
-      : Object.keys(state.config.providers || {})
+      : Object.keys(state.config.providers || {}),
+    //#260522 Red 小说模式：男主角卡 + 模板（女明星卡在 heroine CRUD 中单独保存）
+    novel_male_name:       $("s-male-name").value.trim(),
+    novel_male_birth:      $("s-male-birth").value.trim(),
+    novel_male_hometown:   $("s-male-hometown").value.trim(),
+    novel_male_height:     $("s-male-height").value.trim(),
+    novel_male_education:  $("s-male-education").value.trim(),
+    novel_male_appearance: $("s-male-appearance").value.trim(),
+    novel_male_hobbies:    $("s-male-hobbies").value.trim(),
+    novel_male_friends:    $("s-male-friends").value.trim(),
+    novel_male_career:     $("s-male-career").value.trim(),
+    novel_prompt_template: $("s-novel-template").value.trim(),
+    novel_heroines:        state.config.novel_heroines || {},
+    story_char_cards:      state.config.story_char_cards || {}
   };
 
   // 260521 Red 直接调用桥接槽保存，无需等待响应
@@ -1488,6 +1546,275 @@ function saveNewPrompt() {
   renderPrompts();
 }
 
+// ─── 小说模式 ─────────────────────────────────────────────────────────────────
+//#260522 Red 从 config 构建小说系统提示词（模板 + 男主角设定 + 女明星设定）
+function buildNovelSystemPrompt() {
+  const cfg = state.config;
+  const template = (cfg.novel_prompt_template || "").trim();
+
+  const maleFields = [
+    ["姓名",     cfg.novel_male_name],
+    ["出生年份", cfg.novel_male_birth],
+    ["籍贯",     cfg.novel_male_hometown],
+    ["身高",     cfg.novel_male_height],
+    ["学历",     cfg.novel_male_education],
+    ["外貌",     cfg.novel_male_appearance],
+    ["爱好",     cfg.novel_male_hobbies],
+    ["固定朋友", cfg.novel_male_friends],
+    ["职业背景", cfg.novel_male_career]
+  ];
+  const maleLines = maleFields.filter(([, v]) => v && v.trim()).map(([k, v]) => `${k}：${v.trim()}`);
+  const maleCard = maleLines.length > 0 ? `【男主角设定】\n${maleLines.join("\n")}` : "";
+
+  const heroines = cfg.novel_heroines || {};
+  const heroine  = heroines[state.novelHeroine];
+  let heroineCard = "";
+  if (heroine) {
+    const hFields = [
+      ["姓名",      heroine.name],
+      ["出生日期",  heroine.birth],
+      ["身高",      heroine.height],
+      ["国籍/公司", heroine.company],
+      ["性格关键词",heroine.personality],
+      ["语言风格",  heroine.speech],
+      ["爱好",      heroine.hobbies],
+      ["代表作品",  heroine.works],
+      ["当前日程",  heroine.schedule],
+      ["补充信息",  heroine.extra]
+    ];
+    const hLines = hFields.filter(([, v]) => v && v.trim()).map(([k, v]) => `${k}：${v.trim()}`);
+    heroineCard = `【女主角设定 — ${heroine.name || state.novelHeroine}】\n${hLines.join("\n")}`;
+  }
+
+  return [template, maleCard, heroineCard].filter(Boolean).join("\n\n");
+}
+
+//#260522 Red 解析小说 AI 回复：提取正文与 1-4 编号选项
+function parseNovelContent(text) {
+  const lines   = text.split("\n");
+  const choices = [];
+  const choiceIdx = new Set();
+
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^([1-4])[.、．]\s*(.+)$/);
+    if (m) {
+      choices.push({ num: parseInt(m[1]), label: m[2].trim() });
+      choiceIdx.add(i);
+    }
+  }
+
+  if (choices.length < 2) return { choices: [], mainText: text };
+
+  const mainText = lines.filter((_, i) => !choiceIdx.has(i)).join("\n").trimEnd();
+  return { choices, mainText };
+}
+
+//#260522 Red 小说章回渲染：正文走 Markdown，选项变按钮
+function renderNovelChapter(content, bubble, text) {
+  const { choices, mainText } = parseNovelContent(text);
+
+  renderMarkdownBubble(bubble, mainText);
+
+  if (choices.length > 0) {
+    const choicesDiv = document.createElement("div");
+    choicesDiv.className = "novel-choices";
+    choices.forEach(c => {
+      const btn = document.createElement("button");
+      btn.className = "novel-choice-btn";
+      btn.textContent = `${c.num}. ${c.label}`;
+      btn.onclick = () => {
+        userInputEl.value = c.label;
+        autoResizeTextarea();
+        userInputEl.focus();
+      };
+      choicesDiv.appendChild(btn);
+    });
+    content.appendChild(choicesDiv);
+  }
+}
+
+//#260522 Red 女明星角色卡 CRUD
+let _editingHeroineName = null;
+
+function populateHeroineSelect() {
+  const sel = $("heroine-select");
+  if (!sel) return;
+  const heroines = state.config.novel_heroines || {};
+  sel.innerHTML = '<option value="">-- 选择女明星 --</option>';
+  Object.keys(heroines).forEach(name => {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    if (name === state.novelHeroine) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function openHeroineCard(name) {
+  _editingHeroineName = name || null;
+  const heroines = state.config.novel_heroines || {};
+  const h = name ? (heroines[name] || {}) : {};
+  $("heroine-card-title").textContent = name ? `编辑 — ${name}` : "新建角色卡";
+  $("hc-name").value        = h.name        || "";
+  $("hc-birth").value       = h.birth       || "";
+  $("hc-height").value      = h.height      || "";
+  $("hc-company").value     = h.company     || "";
+  $("hc-personality").value = h.personality || "";
+  $("hc-speech").value      = h.speech      || "";
+  $("hc-hobbies").value     = h.hobbies     || "";
+  $("hc-works").value       = h.works       || "";
+  $("hc-schedule").value    = h.schedule    || "";
+  $("hc-extra").value       = h.extra       || "";
+  $("hc-delete").style.display = name ? "" : "none";
+  $("heroine-card-overlay").classList.add("open");
+}
+
+function saveHeroineCard() {
+  const name = $("hc-name").value.trim();
+  if (!name) { $("hc-name").focus(); return; }
+
+  const heroines = { ...(state.config.novel_heroines || {}) };
+  if (_editingHeroineName && _editingHeroineName !== name) {
+    delete heroines[_editingHeroineName];
+    if (state.novelHeroine === _editingHeroineName) state.novelHeroine = name;
+  }
+
+  heroines[name] = {
+    name,
+    birth:       $("hc-birth").value.trim(),
+    height:      $("hc-height").value.trim(),
+    company:     $("hc-company").value.trim(),
+    personality: $("hc-personality").value.trim(),
+    speech:      $("hc-speech").value.trim(),
+    hobbies:     $("hc-hobbies").value.trim(),
+    works:       $("hc-works").value.trim(),
+    schedule:    $("hc-schedule").value.trim(),
+    extra:       $("hc-extra").value.trim()
+  };
+
+  state.config.novel_heroines = heroines;
+  postConfig({ novel_heroines: heroines });
+
+  if (!state.novelHeroine) state.novelHeroine = name;
+  populateHeroineSelect();
+  $("heroine-select").value = state.novelHeroine;
+  $("heroine-card-overlay").classList.remove("open");
+}
+
+function deleteHeroineCard() {
+  if (!_editingHeroineName) return;
+  const heroines = { ...(state.config.novel_heroines || {}) };
+  delete heroines[_editingHeroineName];
+  if (state.novelHeroine === _editingHeroineName) state.novelHeroine = "";
+  state.config.novel_heroines = heroines;
+  postConfig({ novel_heroines: heroines });
+  populateHeroineSelect();
+  $("heroine-card-overlay").classList.remove("open");
+}
+
+// ─── 故事模式角色卡 ───────────────────────────────────────────────────────────
+//#260522 Red 将故事模式角色卡内容注入系统提示词（卡片放在手动 prompt 之前）
+function buildChatSystemPrompt() {
+  const cards = state.config.story_char_cards || {};
+  const card  = cards[state.storyCharCardName];
+  let cardBlock = "";
+  if (card) {
+    const fields = [
+      ["姓名",       card.name],
+      ["身份/称谓",  card.identity],
+      ["外貌",       card.appearance],
+      ["性格",       card.personality],
+      ["语言风格",   card.speech],
+      ["爱好",       card.hobbies],
+      ["与主角关系", card.relationship],
+      ["背景故事",   card.background],
+      ["补充信息",   card.extra],
+    ];
+    const lines = fields.filter(([, v]) => v && v.trim()).map(([k, v]) => `${k}：${v.trim()}`);
+    if (lines.length > 0) {
+      cardBlock = `【角色设定 — ${card.name || state.storyCharCardName}】\n${lines.join("\n")}`;
+    }
+  }
+  const manual = state.currentSystemPrompt.trim();
+  return [cardBlock, manual].filter(Boolean).join("\n\n");
+}
+
+let _editingStoryChar = null;
+
+function populateStoryCharSelect() {
+  const sel = $("story-char-select");
+  if (!sel) return;
+  const cards = state.config.story_char_cards || {};
+  sel.innerHTML = '<option value="">-- 选择角色 --</option>';
+  Object.keys(cards).forEach(name => {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    if (name === state.storyCharCardName) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function openStoryCharCard(name) {
+  _editingStoryChar = name || null;
+  const cards = state.config.story_char_cards || {};
+  const c = name ? (cards[name] || {}) : {};
+  $("story-char-card-title").textContent = name ? `编辑 — ${name}` : "新建角色卡";
+  $("sc-name").value         = c.name         || "";
+  $("sc-identity").value     = c.identity     || "";
+  $("sc-appearance").value   = c.appearance   || "";
+  $("sc-personality").value  = c.personality  || "";
+  $("sc-speech").value       = c.speech       || "";
+  $("sc-hobbies").value      = c.hobbies      || "";
+  $("sc-relationship").value = c.relationship || "";
+  $("sc-background").value   = c.background   || "";
+  $("sc-extra").value        = c.extra        || "";
+  $("sc-delete").style.display = name ? "" : "none";
+  $("story-char-card-overlay").classList.add("open");
+}
+
+function saveStoryCharCard() {
+  const name = $("sc-name").value.trim();
+  if (!name) { $("sc-name").focus(); return; }
+
+  const cards = { ...(state.config.story_char_cards || {}) };
+  if (_editingStoryChar && _editingStoryChar !== name) {
+    delete cards[_editingStoryChar];
+    if (state.storyCharCardName === _editingStoryChar) state.storyCharCardName = name;
+  }
+
+  cards[name] = {
+    name,
+    identity:     $("sc-identity").value.trim(),
+    appearance:   $("sc-appearance").value.trim(),
+    personality:  $("sc-personality").value.trim(),
+    speech:       $("sc-speech").value.trim(),
+    hobbies:      $("sc-hobbies").value.trim(),
+    relationship: $("sc-relationship").value.trim(),
+    background:   $("sc-background").value.trim(),
+    extra:        $("sc-extra").value.trim(),
+  };
+
+  state.config.story_char_cards = cards;
+  postConfig({ story_char_cards: cards });
+
+  if (!state.storyCharCardName) state.storyCharCardName = name;
+  populateStoryCharSelect();
+  $("story-char-select").value = state.storyCharCardName;
+  $("story-char-card-overlay").classList.remove("open");
+}
+
+function deleteStoryCharCard() {
+  if (!_editingStoryChar) return;
+  const cards = { ...(state.config.story_char_cards || {}) };
+  delete cards[_editingStoryChar];
+  if (state.storyCharCardName === _editingStoryChar) state.storyCharCardName = "";
+  state.config.story_char_cards = cards;
+  postConfig({ story_char_cards: cards });
+  populateStoryCharSelect();
+  $("story-char-card-overlay").classList.remove("open");
+}
+
 // ─── 事件绑定 ────────────────────────────────────────────────────────────────
 function setupEventListeners() {
   // 交通灯按钮
@@ -1586,6 +1913,36 @@ function setupEventListeners() {
       const title = el.querySelector(".history-title")?.textContent.toLowerCase() ?? "";
       el.style.display = (!q || title.includes(q)) ? "" : "none";
     });
+  });
+
+  //#260522 Red 故事模式：角色卡选择 + 面板事件
+  $("story-char-select").addEventListener("change", () => {
+    state.storyCharCardName = $("story-char-select").value;
+  });
+  $("story-char-card-btn").addEventListener("click", () => {
+    openStoryCharCard(state.storyCharCardName || null);
+  });
+  $("story-char-add-btn").addEventListener("click", () => openStoryCharCard(null));
+  $("sc-cancel").addEventListener("click", () => $("story-char-card-overlay").classList.remove("open"));
+  $("sc-save").addEventListener("click", saveStoryCharCard);
+  $("sc-delete").addEventListener("click", deleteStoryCharCard);
+  $("story-char-card-overlay").addEventListener("click", e => {
+    if (e.target === $("story-char-card-overlay")) $("story-char-card-overlay").classList.remove("open");
+  });
+
+  //#260522 Red 小说模式：女明星选择 + 角色卡面板事件
+  $("heroine-select").addEventListener("change", () => {
+    state.novelHeroine = $("heroine-select").value;
+  });
+  $("heroine-card-btn").addEventListener("click", () => {
+    openHeroineCard(state.novelHeroine || null);
+  });
+  $("heroine-add-btn").addEventListener("click", () => openHeroineCard(null));
+  $("hc-cancel").addEventListener("click", () => $("heroine-card-overlay").classList.remove("open"));
+  $("hc-save").addEventListener("click", saveHeroineCard);
+  $("hc-delete").addEventListener("click", deleteHeroineCard);
+  $("heroine-card-overlay").addEventListener("click", e => {
+    if (e.target === $("heroine-card-overlay")) $("heroine-card-overlay").classList.remove("open");
   });
 
   $("prompts-btn").addEventListener("click", openPromptLib);

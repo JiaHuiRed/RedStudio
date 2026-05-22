@@ -925,9 +925,8 @@ body {
 #settings-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.38);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  //#260522 Red 移除 backdrop-filter，Chromium 滚动时重合成模糊层会闪烁
+  background: rgba(0,0,0,0.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1337,12 +1336,176 @@ body {
    260515 Red 故事模式专属样式
 ═══════════════════════════════════════════════════════════ */
 /* 扩宽消息内容区 */
-#content[data-mode="story"] .msg-content {
+#content[data-mode="novel"] .msg-content {
   max-width: calc(90% - 42px);
 }
-#content[data-mode="story"] .msg-row.user .msg-bubble {
+#content[data-mode="novel"] .msg-row.user .msg-bubble {
   max-width: 86%;
 }
+
+/* ── 260522 Red 角色选择区（故事模式侧边栏） ── */
+#story-char-section {
+  display: none;
+  padding: 0 9px 8px;
+  border-bottom: 1px solid var(--sidebar-border);
+}
+body[data-mode="chat"] #story-char-section { display: block; }
+#story-char-select-row {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+#story-char-select {
+  flex: 1;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: var(--font);
+  cursor: pointer;
+  outline: none;
+  min-width: 0;
+}
+#story-char-add-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color 0.12s, border-color 0.12s;
+}
+#story-char-add-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ── 260522 Red 故事模式角色卡面板 ── */
+#story-char-card-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+}
+#story-char-card-overlay.open { display: flex; }
+#story-char-card-panel {
+  background: var(--input-bg);
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  width: 480px;
+  max-width: 92vw;
+  max-height: 88vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.28);
+}
+#story-char-card-panel h2 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* ── 260522 Red 女明星选择区（小说模式侧边栏） ── */
+#novel-heroine-section {
+  display: none;
+  padding: 0 9px 8px;
+  border-bottom: 1px solid var(--sidebar-border);
+}
+body[data-mode="novel"] #novel-heroine-section { display: block; }
+#heroine-select-row {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+#heroine-select {
+  flex: 1;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: var(--font);
+  cursor: pointer;
+  outline: none;
+  min-width: 0;
+}
+#heroine-add-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color 0.12s, border-color 0.12s;
+}
+#heroine-add-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ── 260522 Red 女明星角色卡面板 ── */
+#heroine-card-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+}
+#heroine-card-overlay.open { display: flex; }
+#heroine-card-panel {
+  background: var(--input-bg);
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  width: 480px;
+  max-width: 92vw;
+  max-height: 88vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.28);
+}
+#heroine-card-panel h2 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* 小说章回选项按钮 */
+.novel-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 10px;
+}
+.novel-choice-btn {
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--accent);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-size: 13px;
+  font-family: var(--font);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, color 0.15s, transform 0.1s;
+  word-break: break-word;
+  line-height: 1.45;
+}
+.novel-choice-btn:hover { background: var(--accent); color: #fff; }
+.novel-choice-btn:active { transform: scale(0.97); }
 
 /* 角色名标签（气泡上方） */
 .story-char-name {
@@ -1428,9 +1591,8 @@ body {
 #prompts-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.38);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  //#260522 Red 移除 backdrop-filter，Chromium 滚动时重合成模糊层会闪烁
+  background: rgba(0,0,0,0.5);
   display: flex;
   align-items: center;
   justify-content: center;
