@@ -3,7 +3,7 @@
 > **轻量本地 AI 对话桌面客户端，支持 Ollama 本地模型与任意 OpenAI 兼容云端 API。**
 > 作者：Red · 基于 PySide6 + QWebChannel 构建，无 Flask 无 HTTP 层。
 
-[![版本](https://img.shields.io/badge/版本-v3.3.1-blue)](CHANGELOG.md)
+[![版本](https://img.shields.io/badge/版本-v3.3.2-blue)](CHANGELOG.md)
 [![平台](https://img.shields.io/badge/平台-Windows%2010%2F11-lightblue)](https://github.com/JiaHuiRed/RedStudio)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-yellow)](https://python.org)
 [![许可证](https://img.shields.io/badge/许可证-MIT-lightgrey)](LICENSE)

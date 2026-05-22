@@ -1,5 +1,5 @@
 # author Red
-# @project  Red Studio  3.3.1
+# @project  Red Studio  3.3.2
 # @since    2026-05-14
 # @updated  2026-05-22
 # 260521 Red QWebChannel 重构：移除 Flask HTTP 层，改用 Qt 直接桥接
@@ -15,7 +15,7 @@ import sys
 import threading
 
 from PySide6.QtCore import QObject, Qt, QSize, QUrl, Signal, Slot
-from PySide6.QtGui import QGuiApplication, QIcon
+from PySide6.QtGui import QGuiApplication, QIcon, QCursor
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEngineScript
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -38,8 +38,9 @@ FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
 # 260514 Red 历史对话持久化路径：~/.aistory/history.json
 _HISTORY_PATH = pathlib.Path.home() / ".aistory" / "history.json"
 
-# Win32 WM_NCLBUTTONDOWN：直接告知 Windows 哪条边被按下，比 Qt 的 startSystemResize 更可靠
+# Win32 WM_NCLBUTTONDOWN：标题栏拖拽使用，缩放由 WM_NCHITTEST 自动处理
 _WM_NCLBUTTONDOWN = 0x00A1
+
 _EDGE_TO_HT = {
     1: 10,   # HTLEFT
     2: 11,   # HTRIGHT
@@ -428,7 +429,6 @@ class Bridge(QObject):
 class MainWindow(QWebEngineView):
     def __init__(self):
         super().__init__()
-
         # 260514 Red FramelessWindowHint 移除系统标题栏，由前端 HTML 接管
         self.setWindowFlags(
             Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint
@@ -442,6 +442,7 @@ class MainWindow(QWebEngineView):
         script.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
         self.page().scripts().insert(script)
 
+
     def _toggle_maximize(self):
         if self.isMaximized():
             self.showNormal()
@@ -449,18 +450,17 @@ class MainWindow(QWebEngineView):
             self.showMaximized()
 
     def nativeEvent(self, eventType, message):
-        #260521 Red WM_NCHITTEST：原生处理四边/顶角缩放，解决上下边和顶角无法拖拽缩放的问题
+        #260522 Red WM_NCHITTEST：原生处理四边/顶角缩放 + 标题栏拖拽，b=12
         if eventType == b"windows_generic_MSG":
             msg = ctypes.wintypes.MSG.from_address(int(message))
             if msg.message == 0x0084:  # WM_NCHITTEST
-                pt = ctypes.wintypes.POINT()
-                ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
+                pt = QCursor.pos()  # 逻辑像素，与 frameGeometry 一致
                 geo = self.frameGeometry()
-                x = pt.x - geo.x()
-                y = pt.y - geo.y()
+                x = pt.x() - geo.x()
+                y = pt.y() - geo.y()
                 w = geo.width()
                 h = geo.height()
-                b = 8  # 缩放边框像素
+                b = 12  # 缩放边框像素，与 JS RESIZE_MARGIN 统一
                 left   = x < b
                 right  = x > w - b
                 top    = y < b
@@ -473,10 +473,13 @@ class MainWindow(QWebEngineView):
                 if bottom: return True, 15  # HTBOTTOM
                 if left:   return True, 10  # HTLEFT
                 if right:  return True, 11  # HTRIGHT
-                # 标题栏拖移（x<88 为交通灯区域，交给 JS 处理点击）
-                if y < 48 and x >= 88:
+                # 标题栏拖移（x<108 为交通灯+折叠键区域，交给 JS 处理点击）
+                if y < 48 and x >= 108:
                     return True, 2  # HTCAPTION
         return super().nativeEvent(eventType, message)
+
+    def closeEvent(self, event):
+        super().closeEvent(event)
 
     def _start_system_move(self):
         #260521 Red 使用 Win32 PostMessage 触发移动，避免 QWebEngineView 侧边栏闪烁
