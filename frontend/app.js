@@ -283,7 +283,7 @@ const state = {
   currentSystemPrompt: "",  // 当前对话的系统提示词
   storyCharacters: {},      // { 角色名: { color, avatar } }
   storyCharCardName: "",    //#260522 Red 当前选中的故事模式角色卡名称
-  novelHeroine: "",         //#260522 Red 当前选中的小说模式女明星名称
+  novelHeroine: "",         //#260522 Red 当前选中的小说模式女主角名称
   // 260515 Red Token 统计：当前对话累计消耗
   sessionTokens: { prompt: 0, completion: 0 },
   // 260515 Red 提示词库：[{ title, content }]
@@ -1574,12 +1574,13 @@ function buildNovelSystemPrompt() {
       ["姓名",      heroine.name],
       ["出生日期",  heroine.birth],
       ["身高",      heroine.height],
-      ["国籍/公司", heroine.company],
+      ["身材体型",  heroine.figure],
+      ["外貌描述",  heroine.appearance],
       ["性格关键词",heroine.personality],
       ["语言风格",  heroine.speech],
       ["爱好",      heroine.hobbies],
-      ["代表作品",  heroine.works],
-      ["当前日程",  heroine.schedule],
+      ["出身/身份", heroine.origin],
+      ["当前状态",  heroine.schedule],
       ["补充信息",  heroine.extra]
     ];
     const hLines = hFields.filter(([, v]) => v && v.trim()).map(([k, v]) => `${k}：${v.trim()}`);
@@ -1633,14 +1634,14 @@ function renderNovelChapter(content, bubble, text) {
   }
 }
 
-//#260522 Red 女明星角色卡 CRUD
+//#260522 Red 女主角角色卡 CRUD
 let _editingHeroineName = null;
 
 function populateHeroineSelect() {
   const sel = $("heroine-select");
   if (!sel) return;
   const heroines = state.config.novel_heroines || {};
-  sel.innerHTML = '<option value="">-- 选择女明星 --</option>';
+  sel.innerHTML = '<option value="">-- 选择角色 --</option>';
   Object.keys(heroines).forEach(name => {
     const opt = document.createElement("option");
     opt.value = name;
@@ -1658,11 +1659,12 @@ function openHeroineCard(name) {
   $("hc-name").value        = h.name        || "";
   $("hc-birth").value       = h.birth       || "";
   $("hc-height").value      = h.height      || "";
-  $("hc-company").value     = h.company     || "";
+  $("hc-figure").value      = h.figure      || "";
+  $("hc-appearance").value  = h.appearance  || "";
   $("hc-personality").value = h.personality || "";
   $("hc-speech").value      = h.speech      || "";
   $("hc-hobbies").value     = h.hobbies     || "";
-  $("hc-works").value       = h.works       || "";
+  $("hc-origin").value      = h.origin      || "";
   $("hc-schedule").value    = h.schedule    || "";
   $("hc-extra").value       = h.extra       || "";
   $("hc-delete").style.display = name ? "" : "none";
@@ -1683,11 +1685,12 @@ function saveHeroineCard() {
     name,
     birth:       $("hc-birth").value.trim(),
     height:      $("hc-height").value.trim(),
-    company:     $("hc-company").value.trim(),
+    figure:      $("hc-figure").value.trim(),
+    appearance:  $("hc-appearance").value.trim(),
     personality: $("hc-personality").value.trim(),
     speech:      $("hc-speech").value.trim(),
     hobbies:     $("hc-hobbies").value.trim(),
-    works:       $("hc-works").value.trim(),
+    origin:      $("hc-origin").value.trim(),
     schedule:    $("hc-schedule").value.trim(),
     extra:       $("hc-extra").value.trim()
   };
@@ -1930,7 +1933,7 @@ function setupEventListeners() {
     if (e.target === $("story-char-card-overlay")) $("story-char-card-overlay").classList.remove("open");
   });
 
-  //#260522 Red 小说模式：女明星选择 + 角色卡面板事件
+  //#260522 Red 小说模式：女主角选择 + 角色卡面板事件
   $("heroine-select").addEventListener("change", () => {
     state.novelHeroine = $("heroine-select").value;
   });

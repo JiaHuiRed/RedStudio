@@ -101,10 +101,10 @@
       </div>
     </div>
 
-    <!-- 260522 Red 小说模式：女明星选择区（仅小说模式可见） -->
+    <!-- 260522 Red 小说模式：女主角选择区（仅小说模式可见） -->
     <div id="novel-heroine-section">
       <div class="section-label">
-        <span>女明星</span>
+        <span>女主角</span>
         <button id="heroine-card-btn" class="model-refresh-btn" title="编辑角色卡">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -113,7 +113,7 @@
         </button>
       </div>
       <div id="heroine-select-row">
-        <select id="heroine-select"><option value="">-- 选择女明星 --</option></select>
+        <select id="heroine-select"><option value="">-- 选择角色 --</option></select>
         <button id="heroine-add-btn" title="新建角色卡">+</button>
       </div>
     </div>
@@ -394,22 +394,23 @@
   </div>
 </div>
 
-<!-- 260522 Red 女明星角色卡面板 -->
+<!-- 260522 Red 女主角角色卡面板 -->
 <div id="heroine-card-overlay">
   <div id="heroine-card-panel">
-    <h2 id="heroine-card-title">女明星角色卡</h2>
+    <h2 id="heroine-card-title">角色卡</h2>
     <div class="settings-group" style="margin:0">
-      <div class="settings-row"><label>姓名</label><input type="text" id="hc-name" placeholder="金旼炡" maxlength="30"/></div>
-      <div class="settings-row"><label>出生日期</label><input type="text" id="hc-birth" placeholder="1998年8月5日" maxlength="30"/></div>
-      <div class="settings-row"><label>身高</label><input type="text" id="hc-height" placeholder="168cm" maxlength="10"/></div>
-      <div class="settings-row"><label>国籍 / 公司</label><input type="text" id="hc-company" placeholder="韩国 / SM Entertainment" maxlength="60"/></div>
-      <div class="settings-row"><label>性格关键词</label><input type="text" id="hc-personality" placeholder="开朗、专业、对粉丝温柔…" maxlength="100"/></div>
-      <div class="settings-row"><label>语言风格</label><input type="text" id="hc-speech" placeholder="中韩双语，说话直接…" maxlength="100"/></div>
-      <div class="settings-row"><label>爱好</label><input type="text" id="hc-hobbies" placeholder="练舞、读书、料理…" maxlength="100"/></div>
-      <div class="settings-row"><label>代表作品</label><input type="text" id="hc-works" placeholder="aespa成员、《黑骑士》…" maxlength="150"/></div>
+      <div class="settings-row"><label>姓名</label><input type="text" id="hc-name" placeholder="林晓柔" maxlength="30"/></div>
+      <div class="settings-row"><label>出生日期</label><input type="text" id="hc-birth" placeholder="2000年3月15日" maxlength="30"/></div>
+      <div class="settings-row"><label>身高</label><input type="text" id="hc-height" placeholder="165cm" maxlength="10"/></div>
+      <div class="settings-row"><label>身材体型</label><input type="text" id="hc-figure" placeholder="苗条、纤细、长腿…" maxlength="80"/></div>
+      <div class="settings-row"><label>外貌描述</label><input type="text" id="hc-appearance" placeholder="长发、杏眼、气质出众…" maxlength="100"/></div>
+      <div class="settings-row"><label>性格关键词</label><input type="text" id="hc-personality" placeholder="开朗、温柔、有主见…" maxlength="100"/></div>
+      <div class="settings-row"><label>语言风格</label><input type="text" id="hc-speech" placeholder="说话温和、偶尔毒舌…" maxlength="100"/></div>
+      <div class="settings-row"><label>爱好</label><input type="text" id="hc-hobbies" placeholder="读书、跑步、做饭…" maxlength="100"/></div>
+      <div class="settings-row"><label>出身 / 身份</label><input type="text" id="hc-origin" placeholder="大学生、职场新人、设计师…" maxlength="150"/></div>
       <div class="settings-row" style="flex-direction:column;align-items:stretch">
-        <label style="margin-bottom:6px">近期行程 / 当前背景</label>
-        <textarea id="hc-schedule" rows="3" placeholder="2026年5月 aespa 正在进行…巡演/打歌等"></textarea>
+        <label style="margin-bottom:6px">当前状态 / 背景</label>
+        <textarea id="hc-schedule" rows="3" placeholder="当前所处情境、近期发生的事…"></textarea>
       </div>
       <div class="settings-row" style="flex-direction:column;align-items:stretch">
         <label style="margin-bottom:6px">补充信息</label>

@@ -3,7 +3,7 @@
 > **轻量本地 AI 对话桌面客户端，支持 Ollama 本地模型与任意 OpenAI 兼容云端 API。**
 > 作者：Red · 基于 PySide6 + QWebChannel 构建，无 Flask 无 HTTP 层。
 
-[![版本](https://img.shields.io/badge/版本-v3.3.0-blue)](CHANGELOG.md)
+[![版本](https://img.shields.io/badge/版本-v3.3.1-blue)](CHANGELOG.md)
 [![平台](https://img.shields.io/badge/平台-Windows%2010%2F11-lightblue)](https://github.com/JiaHuiRed/RedStudio)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-yellow)](https://python.org)
 [![许可证](https://img.shields.io/badge/许可证-MIT-lightgrey)](LICENSE)
@@ -37,9 +37,9 @@
 
 ## 📖 小说模式（互动写作）
 
-- **女明星角色卡**：姓名、出生日期、身高、国籍/公司、性格关键词、语言风格、爱好、代表作品、当前日程，CRUD 管理
+- **女主角角色卡**：姓名、出生日期、身高、身材体型、外貌描述、性格关键词、语言风格、爱好、出身/身份、当前状态，CRUD 管理（适用于任意女性角色）
 - **男主角设定**：在设置面板中填写姓名、籍贯、外貌等字段
-- **小说提示词模板**：粘贴完整 system prompt，三者自动拼接后发送
+- **小说提示词模板**：粘贴完整 system prompt，角色卡与主角设定自动拼接后发送
 - AI 回复自动解析编号选项（1–4），渲染为可点击的章回选项按钮
 
 ## 📊 Token 统计
