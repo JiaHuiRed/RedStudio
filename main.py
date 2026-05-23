@@ -516,6 +516,47 @@ class Bridge(QObject):
     def startResize(self, edge: int):
         self._window._start_system_resize(edge)
 
+    # ── 角色库 导出 / 导入 ───────────────────────────────────────────────────────
+
+    @Slot(result=str)
+    def exportCharLib(self) -> str:
+        from PySide6.QtWidgets import QFileDialog
+        path, _ = QFileDialog.getSaveFileName(
+            self._window, "导出角色库", "characters.json", "JSON (*.json)"
+        )
+        if not path:
+            return json.dumps({"error": "cancelled"})
+        with self._config_lock:
+            data = {
+                "novel_heroines":  self._config.get("novel_heroines", {}),
+                "story_char_cards": self._config.get("story_char_cards", {}),
+            }
+        pathlib.Path(path).write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        return json.dumps({"ok": path})
+
+    @Slot(result=str)
+    def importCharLib(self) -> str:
+        from PySide6.QtWidgets import QFileDialog
+        path, _ = QFileDialog.getOpenFileName(
+            self._window, "导入角色库", "", "JSON (*.json)"
+        )
+        if not path:
+            return json.dumps({"error": "cancelled"})
+        data = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+        with self._config_lock:
+            self._config.setdefault("novel_heroines", {}).update(
+                data.get("novel_heroines", {})
+            )
+            self._config.setdefault("story_char_cards", {}).update(
+                data.get("story_char_cards", {})
+            )
+            cfg.save_config(self._config)
+        imported = list(data.get("novel_heroines", {}).keys()) + \
+                   list(data.get("story_char_cards", {}).keys())
+        return json.dumps({"ok": True, "imported": imported})
+
     # ── 窗口几何记忆 ───────────────────────────────────────────────────────────
 
     @Slot()
@@ -540,8 +581,11 @@ class MainWindow(QWebEngineView):
     def __init__(self):
         super().__init__()
         # 260514 Red FramelessWindowHint 移除系统标题栏，由前端 HTML 接管
+        #260523 Red WindowMinimizeButtonHint：让 Windows 任务栏识别最小化，修复点击图标无法缩小的问题
         self.setWindowFlags(
-            Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint
+            Qt.WindowType.Window
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowMinimizeButtonHint
         )
 
         # 260521 Red 注入 qwebchannel.js，使页面中 qt.webChannelTransport 可用

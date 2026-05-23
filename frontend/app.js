@@ -302,11 +302,40 @@ const state = {
   // 260514 Red pendingAvatar: 设置面板中待保存的头像 data URL
   pendingAvatar: undefined,
   // 260515 Red 故事模式（角色扮演）
-  mode: "chat",             // "chat"=故事/角色扮演 | "novel"=小说
+  mode: "rpg",              // "rpg"=RPG冒险 | "novel"=小说
   currentSystemPrompt: "",  // 当前对话的系统提示词
   storyCharacters: {},      // { 角色名: { color, avatar } }
   storyCharCardName: "",    //#260522 Red 当前选中的故事模式角色卡名称
+  //260523 Red RPG 模式角色与状态
+  rpgChar: {
+    name: "", class: "", background: "",
+    str: 10, agi: 10, int: 10, vit: 10,
+    knowledge: 1, charm: 1, guts: 1, kindness: 1, craft: 1
+  },
+  rpgStatus: {
+    hp: 100, hpMax: 100, mp: 50, mpMax: 50,
+    lv: 1, exp: 0, expNext: 100, gold: 50
+  },
+  rpgWorldDir: "",          // 世界/故事方向
   novelHeroine: "",         //#260522 Red 当前选中的小说模式女主角名称
+  //260523 Red 作者注记
+  authorNote:      "",  // 注入 context 靠后位置的临时指令
+  authorNoteDepth: 3,   // 插入深度：距末尾消息条数
+  //260523 Red 小说模式好感度系统
+  novelFav:       0,        // 当前好感度 0-100
+  novelStage:     "陌生人", // 当前阶段
+  //260523 Red 完全自定义阶段：[{name, cap}]，cap 为该阶段好感上限，最后一段固定 100
+  novelStages: [
+    { name: "陌生人", cap: 20 },
+    { name: "相识",   cap: 45 },
+    { name: "朋友",   cap: 70 },
+    { name: "暧昧",   cap: 90 },
+    { name: "恋人",   cap: 100 }
+  ],
+  novelWordCount: 200,      // 每轮正文字数
+  novelPov:       "second", // 叙事视角 first/second/third
+  novelHeroName:  "林然",   // 主角名称
+  novelStoryDir:  "",       // 故事方向 / 主角背景
   // 260515 Red Token 统计：当前对话累计消耗
   sessionTokens: { prompt: 0, completion: 0 },
   // 260515 Red 提示词库：[{ title, content }]
@@ -315,6 +344,13 @@ const state = {
 
 // ─── DOM 引用 ───────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
+
+//260523 Red textarea 内容自动撑高（最大高度由 CSS max-height 控制）
+function autoResizeTextarea(el) {
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = el.scrollHeight + "px";
+}
 const messagesEl      = $("messages");
 const userInputEl     = $("user-input");
 const sendBtn         = $("send-btn");
@@ -345,7 +381,7 @@ async function init() {
   switchProvider(lastProvider, false);
 
   //#260522 Red 恢复上次的模式，兼容旧值 "story"→"novel"
-  const _lastMode = cfg.last_mode === "story" ? "novel" : (cfg.last_mode || "chat");
+  const _lastMode = cfg.last_mode === "story" ? "novel" : (cfg.last_mode || "rpg");
   switchMode(_lastMode, false);
   populateHeroineSelect();
   populateStoryCharSelect();
@@ -363,6 +399,9 @@ async function init() {
   }
 
   setupEventListeners();
+  updateNovelFavBar();
+  updateRpgStatusBar();
+  updateNovelHeroineTag();
 }
 
 // ─── 配置 ───────────────────────────────────────────────────────────────────
@@ -535,12 +574,14 @@ function streamReply(model) {
   //#260522 Red 构造请求：小说模式自动构建，故事模式注入角色卡，其余使用手动输入
   const sysPrompt = state.mode === "novel"
     ? buildNovelSystemPrompt()
-    : state.mode === "chat"
-      ? buildChatSystemPrompt()
+    : state.mode === "rpg"
+      ? (buildRpgSystemPrompt() + (state.currentSystemPrompt.trim() ? "\n\n" + state.currentSystemPrompt.trim() : ""))
       : state.currentSystemPrompt.trim();
-  const apiMessages = sysPrompt
+  const baseMessages = sysPrompt
     ? [{ role: "system", content: sysPrompt }, ...state.messages]
-    : state.messages;
+    : [...state.messages];
+  //260523 Red 注入作者注记：插在距末尾 depth 条位置，AI 对靠近当前输入的内容注意力更高
+  const apiMessages = injectAuthorNote(baseMessages);
 
   bridge.sendChat(JSON.stringify({
     provider:          state.provider,
@@ -619,7 +660,7 @@ function onChatDone() {
   }
 
   //#260522 Red 故事模式（角色扮演）：解析角色名、渲染角色头像、添加选项按钮
-  if (state.mode === "chat" && ctx.fullContent) {
+  if (state.mode === "rpg" && ctx.fullContent) {
     const { charName, mainText, choices } = parseStoryContent(ctx.fullContent);
 
     if (charName) {
@@ -660,6 +701,11 @@ function onChatDone() {
   //#260522 Red 小说模式：解析章回内容，渲染章回分隔线 + 选项按钮
   if (state.mode === "novel" && ctx.fullContent) {
     renderNovelChapter(content, bubble, ctx.fullContent);
+  }
+
+  //260523 Red RPG 模式：解析 [STATUS] 和 [CHOICES]，更新状态栏
+  if (state.mode === "rpg" && ctx.fullContent) {
+    renderRpgChapter(content, bubble, ctx.fullContent);
   }
 
   // 260514 Red 始终渲染 token 标注行
@@ -838,10 +884,14 @@ function switchMode(mode, save = true) {
   const bar   = $("sys-prompt-bar");
   const input = $("sys-prompt-input");
   if (bar)   bar.classList.toggle("novel-mode", mode === "novel");
+  const novelStatusBar = $("novel-status-bar");
+  if (novelStatusBar) novelStatusBar.classList.toggle("hidden", mode !== "novel");
+  const rpgStatusBar = $("rpg-status-bar");
+  if (rpgStatusBar) rpgStatusBar.classList.toggle("hidden", mode !== "rpg");
   if (input) input.placeholder = mode === "novel"
     ? "小说模式（系统提示词自动构建，通常无需手动填写）…"
-    : mode === "chat"
-    ? "设置故事世界观、角色规则、叙事风格…"
+    : mode === "rpg"
+    ? "RPG 模式（可在此补充额外规则，留空使用默认 DM 框架）…"
     : "输入系统提示词（可选）…";
 
   if (save) postConfig({ last_mode: mode });
@@ -898,7 +948,7 @@ function appendMessage(role, content, msgIndex = -1) {
     contentDiv.className = "msg-content";
 
     //#260522 Red 历史消息重放：故事模式解析角色卡，小说模式解析选项
-    if (state.mode === "chat") {
+    if (state.mode === "rpg") {
       const { charName, mainText, choices } = parseStoryContent(content);
 
       const av = makeAvatar();
@@ -991,6 +1041,27 @@ function editUserMessage(msgIndex, content) {
 }
 
 // ─── 新建对话 ────────────────────────────────────────────────────────────────
+//260523 Red 开场白注入：将预设文本作为首条 AI 消息渲染并存入历史
+function injectOpeningMessage(text) {
+  // 从 welcome 屏切换到对话视图
+  messagesEl.innerHTML = "";
+
+  const bubble  = addBubble("ai");
+  const content = bubble.querySelector(".bubble-content");
+  const textEl  = bubble.querySelector(".bubble-text");
+
+  // 小说模式走 renderNovelChapter，否则直接渲染 markdown
+  if (state.mode === "novel") {
+    renderNovelChapter(text, bubble, textEl);
+  } else {
+    textEl.innerHTML = typeof marked !== "undefined" ? marked.parse(text) : text;
+  }
+
+  // 写入对话历史，后续 AI 可以看到这条开场白
+  state.messages.push({ role: "assistant", content: text });
+  saveChatHistory();
+}
+
 function newChat() {
   if (state.messages.length > 0) saveChatHistory();
 
@@ -1002,6 +1073,9 @@ function newChat() {
   updateTokenTotal();
   $("sys-prompt-input").value = "";
   $("sys-prompt-bar").classList.remove("open");
+  state.authorNote = "";
+  $("author-note-input").value = "";
+  $("author-note-bar").classList.remove("open", "active");
 
   messagesEl.innerHTML = "";
   messagesEl.appendChild(makeWelcome());
@@ -1026,6 +1100,18 @@ function saveChatHistory() {
     existing.sessionTokens     = { ...state.sessionTokens };
     existing.novelHeroine      = state.novelHeroine;
     existing.storyCharCardName = state.storyCharCardName;
+    existing.novelFav          = state.novelFav;
+    existing.novelStage        = state.novelStage;
+    existing.novelStages       = state.novelStages.map(s => ({ ...s }));
+    existing.novelWordCount    = state.novelWordCount;
+    existing.novelPov          = state.novelPov;
+    existing.novelHeroName     = state.novelHeroName;
+    existing.novelStoryDir     = state.novelStoryDir;
+    existing.authorNote        = state.authorNote;
+    existing.authorNoteDepth   = state.authorNoteDepth;
+    existing.rpgChar           = { ...state.rpgChar };
+    existing.rpgStatus         = { ...state.rpgStatus };
+    existing.rpgWorldDir       = state.rpgWorldDir;
   } else {
     const newId = state.nextChatId++;
     state.currentChatId = newId;
@@ -1040,7 +1126,18 @@ function saveChatHistory() {
       storyCharacters:   JSON.parse(JSON.stringify(state.storyCharacters)),
       sessionTokens:     { ...state.sessionTokens },
       novelHeroine:      state.novelHeroine,
-      storyCharCardName: state.storyCharCardName
+      storyCharCardName: state.storyCharCardName,
+      novelFav:          state.novelFav,
+      novelStage:        state.novelStage,
+      novelStages:       state.novelStages.map(s => ({ ...s })),
+      novelWordCount:    state.novelWordCount,
+      novelPov:          state.novelPov,
+      novelStoryDir:     state.novelStoryDir,
+      authorNote:        state.authorNote,
+      authorNoteDepth:   state.authorNoteDepth,
+      rpgChar:           { ...state.rpgChar },
+      rpgStatus:         { ...state.rpgStatus },
+      rpgWorldDir:       state.rpgWorldDir
     });
   }
 
@@ -1109,8 +1206,29 @@ function loadChat(chat) {
   //#260522 Red 恢复小说模式女明星选择 + 故事模式角色卡选择
   state.novelHeroine        = chat.novelHeroine      || "";
   state.storyCharCardName   = chat.storyCharCardName || "";
+  //260523 Red 恢复好感度系统状态
+  state.novelFav            = chat.novelFav          ?? 10;
+  state.novelStages = Array.isArray(chat.novelStages) && chat.novelStages[0]?.cap
+    ? chat.novelStages.map(s => ({ ...s }))
+    : [ { name:"陌生人",cap:20 },{ name:"相识",cap:45 },{ name:"朋友",cap:70 },{ name:"暧昧",cap:90 },{ name:"恋人",cap:100 } ];
+  state.novelStage          = chat.novelStage        || novelFavStage(state.novelFav);
+  state.novelWordCount      = chat.novelWordCount    || 200;
+  state.novelPov            = chat.novelPov          || "second";
+  state.novelHeroName       = chat.novelHeroName     || "林然";
+  state.novelStoryDir       = chat.novelStoryDir     || "";
+  state.authorNote          = chat.authorNote        || "";
+  state.authorNoteDepth     = chat.authorNoteDepth   ?? 3;
+  if (chat.rpgChar)   state.rpgChar   = { ...state.rpgChar,   ...chat.rpgChar };
+  if (chat.rpgStatus) state.rpgStatus = { ...state.rpgStatus, ...chat.rpgStatus };
+  state.rpgWorldDir         = chat.rpgWorldDir       || "";
+  updateRpgStatusBar();
+  updateNovelFavBar();
+  updateNovelHeroineTag();
+  $("author-note-input").value = state.authorNote;
+  $("author-note-depth").value = state.authorNoteDepth;
+  $("author-note-bar").classList.toggle("active", state.authorNote.trim().length > 0);
   updateTokenTotal();
-  switchMode(chat.mode || "chat", false);
+  switchMode(chat.mode || "rpg", false);
   populateHeroineSelect();
   populateStoryCharSelect();
   $("sys-prompt-input").value = state.currentSystemPrompt;
@@ -1154,17 +1272,6 @@ async function openSettings() {
   loadTtsVoices(cfg.tts_engine || "edge", cfg.tts_voice || "");
   $("s-chat-font-size").value = String(cfg.chat_font_size || 14);
 
-  //#260522 Red 小说模式设置：男主角卡 + 小说提示词模板
-  $("s-male-name").value       = cfg.novel_male_name       || "";
-  $("s-male-birth").value      = cfg.novel_male_birth      || "";
-  $("s-male-hometown").value   = cfg.novel_male_hometown   || "";
-  $("s-male-height").value     = cfg.novel_male_height     || "";
-  $("s-male-education").value  = cfg.novel_male_education  || "";
-  $("s-male-appearance").value = cfg.novel_male_appearance || "";
-  $("s-male-hobbies").value    = cfg.novel_male_hobbies    || "";
-  $("s-male-friends").value    = cfg.novel_male_friends    || "";
-  $("s-male-career").value     = cfg.novel_male_career     || "";
-  $("s-novel-template").value  = cfg.novel_prompt_template || "";
 
   settingsOverlay.classList.add("visible");
 }
@@ -1212,17 +1319,6 @@ function saveSettings() {
     provider_order: state.config.provider_order?.length
       ? state.config.provider_order
       : Object.keys(state.config.providers || {}),
-    //#260522 Red 小说模式：男主角卡 + 模板（女明星卡在 heroine CRUD 中单独保存）
-    novel_male_name:       $("s-male-name").value.trim(),
-    novel_male_birth:      $("s-male-birth").value.trim(),
-    novel_male_hometown:   $("s-male-hometown").value.trim(),
-    novel_male_height:     $("s-male-height").value.trim(),
-    novel_male_education:  $("s-male-education").value.trim(),
-    novel_male_appearance: $("s-male-appearance").value.trim(),
-    novel_male_hobbies:    $("s-male-hobbies").value.trim(),
-    novel_male_friends:    $("s-male-friends").value.trim(),
-    novel_male_career:     $("s-male-career").value.trim(),
-    novel_prompt_template: $("s-novel-template").value.trim(),
     novel_heroines:        state.config.novel_heroines || {},
     story_char_cards:      state.config.story_char_cards || {}
   };
@@ -1497,7 +1593,7 @@ function setupTitlebarDrag() {
   if (!titlebar) return;
   const RESIZE_MARGIN = 12;
 
-  // 260522 Red 折叠键和交通灯都不触发拖拽
+  // 260522 Red 折叠键和交通灯不触发拖拽
   const noDrag = "#traffic-lights, #sidebar-toggle";
 
   titlebar.addEventListener("mousedown", (e) => {
@@ -1590,24 +1686,67 @@ function saveNewPrompt() {
 
 // ─── 小说模式 ─────────────────────────────────────────────────────────────────
 //#260522 Red 从 config 构建小说系统提示词（模板 + 男主角设定 + 女明星设定）
+//260523 Red 作者注记注入：在 context 靠后位置插入一条 system 消息
+function injectAuthorNote(messages) {
+  const note = state.authorNote.trim();
+  if (!note) return messages;
+  const depth = Math.max(1, state.authorNoteDepth || 3);
+  const msgs = [...messages];
+  // 系统提示词在索引 0，跳过它；其余消息从 1 开始计算插入位置
+  const sysOffset = msgs[0]?.role === "system" ? 1 : 0;
+  const insertPos = Math.max(sysOffset, msgs.length - depth);
+  msgs.splice(insertPos, 0, { role: "system", content: note });
+  return msgs;
+}
+
+//260523 Red 好感度阶段映射（按 cap 阈值查找，支持完全自定义）
+function novelFavStage(fav) {
+  for (const s of state.novelStages) {
+    if (fav <= s.cap) return s.name;
+  }
+  return state.novelStages[state.novelStages.length - 1]?.name || "恋人";
+}
+
+//260523 Red 应用好感度变化，更新状态栏
+function applyNovelFavDelta(delta) {
+  if (delta === 0) return;
+  const prevStage = state.novelStage;
+  state.novelFav = Math.max(0, Math.min(100, state.novelFav + delta));
+  state.novelStage = novelFavStage(state.novelFav);
+  updateNovelFavBar();
+  if (state.novelStage !== prevStage) {
+    showNovelStageToast(state.novelStage);
+  }
+}
+
+//260523 Red 同步状态栏显示
+function updateNovelFavBar() {
+  const fill    = $("novel-fav-fill");
+  const valEl   = $("novel-fav-value");
+  const stageEl = $("novel-stage-text");
+  if (fill)    fill.style.width = `${state.novelFav}%`;
+  if (valEl)   valEl.textContent = state.novelFav;
+  if (stageEl) stageEl.textContent = state.novelStage;
+}
+
+//260523 Red 阶段升降提示（淡入淡出 toast）
+function showNovelStageToast(stage) {
+  const toast = document.createElement("div");
+  toast.className = "novel-stage-toast";
+  toast.textContent = `好感度阶段：${stage}`;
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add("show"));
+  setTimeout(() => {
+    toast.classList.remove("show");
+    setTimeout(() => toast.remove(), 400);
+  }, 2000);
+}
+
 function buildNovelSystemPrompt() {
-  const cfg = state.config;
-  const template = (cfg.novel_prompt_template || "").trim();
+  const cfg      = state.config;
+  const heroName = (state.novelHeroName || "林然").trim();
 
-  const maleFields = [
-    ["姓名",     cfg.novel_male_name],
-    ["出生年份", cfg.novel_male_birth],
-    ["籍贯",     cfg.novel_male_hometown],
-    ["身高",     cfg.novel_male_height],
-    ["学历",     cfg.novel_male_education],
-    ["外貌",     cfg.novel_male_appearance],
-    ["爱好",     cfg.novel_male_hobbies],
-    ["固定朋友", cfg.novel_male_friends],
-    ["职业背景", cfg.novel_male_career]
-  ];
-  const maleLines = maleFields.filter(([, v]) => v && v.trim()).map(([k, v]) => `${k}：${v.trim()}`);
-  const maleCard = maleLines.length > 0 ? `【男主角设定】\n${maleLines.join("\n")}` : "";
-
+  //260523 Red 女主角角色卡
   const heroines = cfg.novel_heroines || {};
   const heroine  = heroines[state.novelHeroine];
   let heroineCard = "";
@@ -1629,34 +1768,99 @@ function buildNovelSystemPrompt() {
     heroineCard = `【女主角设定 — ${heroine.name || state.novelHeroine}】\n${hLines.join("\n")}`;
   }
 
-  return [template, maleCard, heroineCard].filter(Boolean).join("\n\n");
+  //260523 Red 故事方向 / 主角背景
+  const storyDir = (state.novelStoryDir || "").trim();
+  const storySection = storyDir ? `【故事方向 / 主角背景】\n${storyDir}` : "";
+
+  //260523 Red 好感度状态 + 输出格式指令
+  const fav       = state.novelFav;
+  const stage     = novelFavStage(fav);
+  const wordCount = state.novelWordCount || 200;
+  const pov       = state.novelPov === "first" ? "第一人称（我/林然）"
+                  : state.novelPov === "third" ? "第三人称（他/林然）"
+                  : "第二人称（你/林然）";
+
+  const formatBlock = `【输出格式（每次严格遵守，不得省略）】
+第一行：【本段标题】
+第二行：📍地点 · 🕐时间 · 天气
+空一行，正文约${wordCount}字，${pov}叙事，自然推进剧情。
+空一行，输出选项块：
+
+[CHOICES]
+A|+N|选项文本
+B|+N|选项文本
+C|+N|选项文本
+D|+N|选项文本
+[/CHOICES]
+
+若玩家自由输入而非选项，回复末尾追加：[FAV:+N]（N为-2到+5的整数）
+
+【好感度状态】
+当前：${fav}/100 · 阶段：${stage}
+0-20 陌生人 · 21-45 相识 · 46-70 朋友 · 71-90 暧昧 · 91-100 恋人
+每个选项的好感变化限定在 -2 到 +5 之间，根据当前阶段调整女主角的称呼与亲密程度。`;
+
+  //260523 Red 用户在系统提示词栏手动输入的内容（骨架/额外设定）一并附加
+  const manualExtra = state.currentSystemPrompt.trim();
+
+  const autoBase = `你是一部互动小说的写手，负责推进故事，扮演除${heroName}以外的所有角色。`;
+  return [autoBase, storySection, heroineCard, formatBlock, manualExtra].filter(Boolean).join("\n\n");
 }
 
-//#260522 Red 解析小说 AI 回复：提取正文与 1-4 编号选项
+//260523 Red 解析小说 AI 回复：提取正文、[CHOICES] 块（含好感变化）、[FAV:N] 标签
 function parseNovelContent(text) {
-  const lines   = text.split("\n");
+  let mainText = text;
   const choices = [];
-  const choiceIdx = new Set();
+  let favDelta = 0;
 
-  for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(/^([1-4])[.、．]\s*(.+)$/);
-    if (m) {
-      choices.push({ num: parseInt(m[1]), label: m[2].trim() });
-      choiceIdx.add(i);
+  // 主格式：[CHOICES]...[/CHOICES]
+  const choicesMatch = mainText.match(/\[CHOICES\]([\s\S]*?)\[\/CHOICES\]/);
+  if (choicesMatch) {
+    mainText = mainText.slice(0, choicesMatch.index).trimEnd();
+    for (const line of choicesMatch[1].trim().split("\n")) {
+      const parts = line.trim().split("|");
+      if (parts.length >= 3) {
+        const label = parts[0].trim();
+        const delta = Math.max(-2, Math.min(5, parseInt(parts[1]) || 0));
+        const choiceText = parts.slice(2).join("|").trim();
+        if (label && choiceText) choices.push({ label, delta, text: choiceText });
+      }
     }
   }
 
-  if (choices.length < 2) return { choices: [], mainText: text };
+  // 自由输入响应的好感标签
+  const favMatch = mainText.match(/\[FAV:([+-]?\d+)\]/);
+  if (favMatch) {
+    favDelta = Math.max(-2, Math.min(5, parseInt(favMatch[1]) || 0));
+    mainText = mainText.replace(favMatch[0], "").trim();
+  }
 
-  const mainText = lines.filter((_, i) => !choiceIdx.has(i)).join("\n").trimEnd();
-  return { choices, mainText };
+  // 兼容旧格式：1. 2. 3. 4. 编号选项
+  if (choices.length === 0) {
+    const lines = mainText.split("\n");
+    const idx = new Set();
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(/^([1-4])[.、．]\s*(.+)$/);
+      if (m) { choices.push({ label: m[1], delta: 0, text: m[2].trim() }); idx.add(i); }
+    }
+    if (choices.length >= 2) {
+      mainText = lines.filter((_, i) => !idx.has(i)).join("\n").trimEnd();
+    } else {
+      choices.length = 0;
+    }
+  }
+
+  return { mainText, choices, favDelta };
 }
 
-//#260522 Red 小说章回渲染：正文走 Markdown，选项变按钮
+//260523 Red 小说章回渲染：正文走 Markdown，选项变按钮（含好感变化徽章）
 function renderNovelChapter(content, bubble, text) {
-  const { choices, mainText } = parseNovelContent(text);
+  const { mainText, choices, favDelta } = parseNovelContent(text);
 
   renderMarkdownBubble(bubble, mainText);
+
+  // 自由输入时应用 AI 给出的好感变化
+  if (favDelta !== 0) applyNovelFavDelta(favDelta);
 
   if (choices.length > 0) {
     const choicesDiv = document.createElement("div");
@@ -1664,9 +1868,19 @@ function renderNovelChapter(content, bubble, text) {
     choices.forEach(c => {
       const btn = document.createElement("button");
       btn.className = "novel-choice-btn";
-      btn.textContent = `${c.num}. ${c.label}`;
+
+      // 好感变化徽章
+      const badge = document.createElement("span");
+      badge.className = `novel-choice-delta ${c.delta > 0 ? "pos" : c.delta < 0 ? "neg" : "zero"}`;
+      badge.textContent = c.delta > 0 ? `+${c.delta}` : `${c.delta}`;
+      btn.appendChild(badge);
+      btn.appendChild(document.createTextNode(c.text));
+
       btn.onclick = () => {
-        userInputEl.value = c.label;
+        applyNovelFavDelta(c.delta);
+        choicesDiv.querySelectorAll(".novel-choice-btn").forEach(b => b.disabled = true);
+        btn.classList.add("selected");
+        userInputEl.value = c.text;
         autoResizeTextarea();
         userInputEl.focus();
       };
@@ -1711,6 +1925,7 @@ function openHeroineCard(name) {
   $("hc-origin").value      = h.origin      || (isNew ? "大学生、职场新人" : "");
   $("hc-schedule").value    = h.schedule    || "";
   $("hc-extra").value       = h.extra       || "";
+  $("hc-opening").value     = h.opening     || "";
   $("hc-delete").style.display = name ? "" : "none";
   $("heroine-card-overlay").classList.add("open");
 }
@@ -1736,7 +1951,8 @@ function saveHeroineCard() {
     hobbies:     $("hc-hobbies").value.trim(),
     origin:      $("hc-origin").value.trim(),
     schedule:    $("hc-schedule").value.trim(),
-    extra:       $("hc-extra").value.trim()
+    extra:       $("hc-extra").value.trim(),
+    opening:     $("hc-opening").value.trim()
   };
 
   state.config.novel_heroines = heroines;
@@ -1744,7 +1960,7 @@ function saveHeroineCard() {
 
   if (!state.novelHeroine) state.novelHeroine = name;
   populateHeroineSelect();
-  $("heroine-select").value = state.novelHeroine;
+  updateNovelHeroineTag();
   $("heroine-card-overlay").classList.remove("open");
 }
 
@@ -1756,6 +1972,7 @@ function deleteHeroineCard() {
   state.config.novel_heroines = heroines;
   postConfig({ novel_heroines: heroines });
   populateHeroineSelect();
+  updateNovelHeroineTag();
   $("heroine-card-overlay").classList.remove("open");
 }
 
@@ -1800,8 +2017,10 @@ function fillHeroineFromTavern(card) {
   $("hc-speech").value      = "";
   $("hc-hobbies").value     = "";
   $("hc-origin").value      = (card.scenario || "").slice(0, 150);
-  $("hc-schedule").value    = (card.first_mes  || "").slice(0, 300);
+  $("hc-schedule").value    = "";
   $("hc-extra").value       = (card.creator_notes || card.system_prompt || "").slice(0, 300);
+  //260523 Red SillyTavern first_mes → 开场白
+  $("hc-opening").value     = (card.first_mes || "").slice(0, 2000);
 }
 
 function fillStoryCharFromTavern(card) {
@@ -1817,6 +2036,116 @@ function fillStoryCharFromTavern(card) {
 
 // ─── 故事模式角色卡 ───────────────────────────────────────────────────────────
 //#260522 Red 将故事模式角色卡内容注入系统提示词（卡片放在手动 prompt 之前）
+//260523 Red 解析 [STATUS]...[/STATUS] 块并更新 rpgStatus
+function parseRpgStatus(text) {
+  const m = text.match(/\[STATUS\]([\s\S]*?)\[\/STATUS\]/);
+  if (!m) return text;
+  const block = m[1];
+  const g = (re) => { const r = block.match(re); return r ? parseInt(r[1]) : null; };
+  const s = state.rpgStatus;
+  const hp    = block.match(/HP:(\d+)\/(\d+)/);
+  const mp    = block.match(/MP:(\d+)\/(\d+)/);
+  const lv    = g(/Lv\.(\d+)/);
+  const exp   = block.match(/EXP:(\d+)\/(\d+)/);
+  const gold  = g(/GOLD:(\d+)/);
+  if (hp)   { s.hp = parseInt(hp[1]); s.hpMax = parseInt(hp[2]); }
+  if (mp)   { s.mp = parseInt(mp[1]); s.mpMax = parseInt(mp[2]); }
+  if (lv !== null)  s.lv = lv;
+  if (exp)  { s.exp = parseInt(exp[1]); s.expNext = parseInt(exp[2]); }
+  if (gold !== null) s.gold = gold;
+  updateRpgStatusBar();
+  return text.slice(0, m.index).trimEnd() + text.slice(m.index + m[0].length).trimStart();
+}
+
+//260523 Red 同步 RPG 状态栏显示
+function updateRpgStatusBar() {
+  const s = state.rpgStatus;
+  const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  set("rpg-hp-val", s.hp);   set("rpg-hp-max", s.hpMax);
+  set("rpg-mp-val", s.mp);   set("rpg-mp-max", s.mpMax);
+  set("rpg-lv", s.lv);
+  set("rpg-exp-val", s.exp); set("rpg-exp-next", s.expNext);
+  set("rpg-gold", s.gold);
+  const nameTag = $("rpg-char-name-tag");
+  if (nameTag) nameTag.textContent = state.rpgChar.name ? `⚔ ${state.rpgChar.name}` : "";
+}
+
+//260523 Red RPG 章节渲染：解析 STATUS + CHOICES，正文走 Markdown
+function renderRpgChapter(content, bubble, text) {
+  const cleanText = parseRpgStatus(text);
+  const { mainText, choices } = parseNovelContent(cleanText);
+  renderMarkdownBubble(bubble, mainText);
+  if (choices.length > 0) {
+    const choicesDiv = document.createElement("div");
+    choicesDiv.className = "novel-choices";
+    choices.forEach(c => {
+      const btn = document.createElement("button");
+      btn.className = "novel-choice-btn";
+      btn.appendChild(document.createTextNode(c.text));
+      btn.onclick = () => {
+        choicesDiv.querySelectorAll(".novel-choice-btn").forEach(b => b.disabled = true);
+        btn.classList.add("selected");
+        userInputEl.value = c.text;
+        autoResizeTextarea();
+        userInputEl.focus();
+      };
+      choicesDiv.appendChild(btn);
+    });
+    content.appendChild(choicesDiv);
+  }
+}
+
+//260523 Red RPG 系统提示词构建（P5 框架：DM 视角，双轨玩法）
+function buildRpgSystemPrompt() {
+  const c = state.rpgChar;
+  const s = state.rpgStatus;
+  const world = (state.rpgWorldDir || "").trim();
+
+  const charLines = [
+    c.name        && `姓名：${c.name}`,
+    c.class       && `职业：${c.class}`,
+    c.background  && `背景：${c.background}`,
+    `战斗属性——力量${c.str} 敏捷${c.agi} 智力${c.int} 体质${c.vit}`,
+    `社交属性——知识${c.knowledge} 魅力${c.charm} 胆识${c.guts} 亲切${c.kindness} 手艺${c.craft}`,
+  ].filter(Boolean).join("\n");
+
+  const statusLine = `HP:${s.hp}/${s.hpMax}  MP:${s.mp}/${s.mpMax}  Lv.${s.lv}  EXP:${s.exp}/${s.expNext}  GOLD:${s.gold}`;
+
+  return `你是一部文字 RPG 游戏的 DM（地下城主），负责生成整个游戏世界和所有 NPC、怪物、事件。玩家扮演以下角色：
+
+【玩家角色】
+${charLines}
+
+${world ? `【世界设定】\n${world}\n` : ""}【输出格式（每次严格遵守）】
+第一行：【场景标题】
+第二行：📍地点 · 🕐时间 · 天气
+空一行，正文约200字，第二人称叙事，描述世界和当前事件。
+
+[STATUS]
+HP:{当前}/{最大}  MP:{当前}/{最大}  Lv.{等级}  EXP:{当前}/{下一级}  GOLD:{金币}
+[/STATUS]
+
+[CHOICES]
+A|{类型}|选项文本
+B|{类型}|选项文本
+C|{类型}|选项文本
+D|{类型}|选项文本
+[/CHOICES]
+
+选项类型参考：战斗/技能/探索/对话/逃跑/休息
+选项解锁条件受社交属性约束（如魅力<3则不显示魅力型选项）
+
+【当前状态】
+${statusLine}
+
+【游戏规则】
+- HP归零时进入濒死状态，给出最后一次救场机会
+- 战斗胜利/探索发现给 EXP，EXP满升级，HP和MP上限提升
+- 每次更新后在 [STATUS] 中同步最新数值
+- 怪物、NPC、物品、地点全部随机生成，风格契合世界设定
+- 双轨叙事：白天/城镇可触发 NPC 社交（好感系统），夜晚/野外触发战斗探索`;
+}
+
 function buildChatSystemPrompt() {
   const cards = state.config.story_char_cards || {};
   const card  = cards[state.storyCharCardName];
@@ -1905,7 +2234,8 @@ function saveStoryCharCard() {
 
   if (!state.storyCharCardName) state.storyCharCardName = name;
   populateStoryCharSelect();
-  $("story-char-select").value = state.storyCharCardName;
+  const scSel = $("story-char-select");
+  if (scSel) scSel.value = state.storyCharCardName;
   $("story-char-card-overlay").classList.remove("open");
 }
 
@@ -1920,6 +2250,87 @@ function deleteStoryCharCard() {
   $("story-char-card-overlay").classList.remove("open");
 }
 
+// ─── 角色库 ──────────────────────────────────────────────────────────────────
+let _charlibTab = "novel"; // "novel" | "story"
+
+function openCharLib() {
+  renderCharLib();
+  $("charlib-overlay").classList.add("open");
+}
+
+function renderCharLib() {
+  const list = $("charlib-list");
+  list.innerHTML = "";
+  if (_charlibTab === "novel") {
+    const heroines = state.config.novel_heroines || {};
+    const names = Object.keys(heroines);
+    if (!names.length) {
+      list.innerHTML = '<div class="charlib-empty">还没有小说角色，点击「新建」创建</div>';
+      return;
+    }
+    names.forEach(name => {
+      const h = heroines[name];
+      const item = document.createElement("div");
+      item.className = "charlib-item" + (name === state.novelHeroine ? " selected" : "");
+      item.innerHTML = `
+        <span class="charlib-item-name">${name}</span>
+        <span class="charlib-item-sub">${h.personality || ""}</span>
+        <button class="charlib-item-edit">编辑</button>`;
+      // 点击行 = 选用该角色
+      item.addEventListener("click", () => {
+        state.novelHeroine = name;
+        updateNovelHeroineTag();
+        $("charlib-overlay").classList.remove("open");
+      });
+      item.querySelector(".charlib-item-edit").addEventListener("click", e => {
+        e.stopPropagation();
+        $("charlib-overlay").classList.remove("open");
+        openHeroineCard(name);
+      });
+      list.appendChild(item);
+    });
+  } else {
+    const cards = state.config.story_char_cards || {};
+    const names = Object.keys(cards);
+    if (!names.length) {
+      list.innerHTML = '<div class="charlib-empty">还没有聊天角色，点击「新建」创建</div>';
+      return;
+    }
+    names.forEach(name => {
+      const c = cards[name];
+      const item = document.createElement("div");
+      item.className = "charlib-item" + (name === state.storyCharCardName ? " selected" : "");
+      item.innerHTML = `
+        <span class="charlib-item-name">${name}</span>
+        <span class="charlib-item-sub">${c.identity || ""}</span>
+        <button class="charlib-item-edit">编辑</button>`;
+      // 点击行 = 选用该角色
+      item.addEventListener("click", () => {
+        state.storyCharCardName = name;
+        $("charlib-overlay").classList.remove("open");
+      });
+      item.querySelector(".charlib-item-edit").addEventListener("click", e => {
+        e.stopPropagation();
+        $("charlib-overlay").classList.remove("open");
+        openStoryCharCard(name);
+      });
+      list.appendChild(item);
+    });
+  }
+}
+
+function updateNovelHeroineTag() {
+  const tag = $("novel-heroine-tag");
+  if (!tag) return;
+  if (state.novelHeroine) {
+    tag.textContent = state.novelHeroine;
+    tag.classList.add("has-char");
+  } else {
+    tag.textContent = "未选择角色";
+    tag.classList.remove("has-char");
+  }
+}
+
 // ─── 事件绑定 ────────────────────────────────────────────────────────────────
 function setupEventListeners() {
   // 交通灯按钮
@@ -1927,6 +2338,39 @@ function setupEventListeners() {
   $("btn-minimize").addEventListener("click", () => bridge.minimize());
   $("btn-maximize").addEventListener("click", () => bridge.toggleMaximize());
   $("sidebar-toggle").addEventListener("click", toggleSidebar);
+
+  $("charlib-btn").addEventListener("click", openCharLib);
+  $("charlib-close").addEventListener("click", () => $("charlib-overlay").classList.remove("open"));
+  $("charlib-overlay").addEventListener("click", e => {
+    if (e.target === $("charlib-overlay")) $("charlib-overlay").classList.remove("open");
+  });
+  document.querySelectorAll(".charlib-tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      _charlibTab = tab.dataset.lib;
+      document.querySelectorAll(".charlib-tab").forEach(t => t.classList.toggle("active", t === tab));
+      renderCharLib();
+    });
+  });
+  $("charlib-new-btn").addEventListener("click", () => {
+    $("charlib-overlay").classList.remove("open");
+    if (_charlibTab === "novel") openHeroineCard(null);
+    else openStoryCharCard(null);
+  });
+  $("charlib-export-btn").addEventListener("click", async () => {
+    const res = JSON.parse(await bridgeCall("exportCharLib"));
+    if (res.ok) showNovelStageToast(`已导出：${res.ok.split(/[\\/]/).pop()}`);
+  });
+  $("charlib-import-btn").addEventListener("click", async () => {
+    const res = JSON.parse(await bridgeCall("importCharLib"));
+    if (res.ok) {
+      const cfgStr = await bridgeCall("getConfig");
+      const cfg = JSON.parse(cfgStr);
+      state.config.novel_heroines   = cfg.novel_heroines  || {};
+      state.config.story_char_cards = cfg.story_char_cards || {};
+      renderCharLib();
+      showNovelStageToast(`已导入 ${res.imported.length} 个角色`);
+    }
+  });
 
   setupTitlebarDrag();
 
@@ -1997,6 +2441,18 @@ function setupEventListeners() {
   });
   $("sys-prompt-input").addEventListener("input", () => {
     state.currentSystemPrompt = $("sys-prompt-input").value;
+    autoResizeTextarea($("sys-prompt-input"));
+  });
+  //260523 Red 作者注记
+  $("author-note-toggle").addEventListener("click", () => {
+    $("author-note-bar").classList.toggle("open");
+  });
+  $("author-note-input").addEventListener("input", () => {
+    state.authorNote = $("author-note-input").value;
+    $("author-note-bar").classList.toggle("active", state.authorNote.trim().length > 0);
+  });
+  $("author-note-depth").addEventListener("input", () => {
+    state.authorNoteDepth = parseInt($("author-note-depth").value) || 3;
   });
 
   $("char-avatar-input").addEventListener("change", async (e) => {
@@ -2035,13 +2491,47 @@ function setupEventListeners() {
   });
 
   //#260522 Red 故事模式：角色卡选择 + 面板事件
-  $("story-char-select").addEventListener("change", () => {
-    state.storyCharCardName = $("story-char-select").value;
+  //260523 Red RPG 角色创建面板
+  $("rpg-setup-btn").addEventListener("click", () => {
+    const c = state.rpgChar;
+    $("rpg-world-dir").value   = state.rpgWorldDir;
+    $("rpg-char-name").value   = c.name;
+    $("rpg-char-class").value  = c.class || "";
+    $("rpg-char-bg").value     = c.background;
+    $("rpg-str").value = c.str; $("rpg-agi").value = c.agi;
+    $("rpg-int").value = c.int; $("rpg-vit").value = c.vit;
+    $("rpg-knowledge").value = c.knowledge; $("rpg-charm").value = c.charm;
+    $("rpg-guts").value = c.guts; $("rpg-kindness").value = c.kindness;
+    $("rpg-craft").value = c.craft;
+    $("rpg-setup-overlay").classList.add("open");
   });
-  $("story-char-card-btn").addEventListener("click", () => {
-    openStoryCharCard(state.storyCharCardName || null);
+  $("rpg-setup-cancel").addEventListener("click", () => $("rpg-setup-overlay").classList.remove("open"));
+  $("rpg-setup-confirm").addEventListener("click", () => {
+    state.rpgWorldDir = $("rpg-world-dir").value.trim();
+    const gi = id => parseInt($(id).value) || 10;
+    state.rpgChar = {
+      name:       $("rpg-char-name").value.trim(),
+      class:      $("rpg-char-class").value,
+      background: $("rpg-char-bg").value.trim(),
+      str: gi("rpg-str"), agi: gi("rpg-agi"),
+      int: gi("rpg-int"), vit: gi("rpg-vit"),
+      knowledge: parseInt($("rpg-knowledge").value)||1,
+      charm:     parseInt($("rpg-charm").value)||1,
+      guts:      parseInt($("rpg-guts").value)||1,
+      kindness:  parseInt($("rpg-kindness").value)||1,
+      craft:     parseInt($("rpg-craft").value)||1,
+    };
+    // 根据体质计算初始 HP/MP
+    state.rpgStatus = {
+      hp: 80 + state.rpgChar.vit * 2,
+      hpMax: 80 + state.rpgChar.vit * 2,
+      mp: 30 + state.rpgChar.int * 2,
+      mpMax: 30 + state.rpgChar.int * 2,
+      lv: 1, exp: 0, expNext: 100, gold: 50
+    };
+    updateRpgStatusBar();
+    $("rpg-setup-overlay").classList.remove("open");
   });
-  $("story-char-add-btn").addEventListener("click", () => openStoryCharCard(null));
   $("sc-cancel").addEventListener("click", () => $("story-char-card-overlay").classList.remove("open"));
   $("sc-save").addEventListener("click", saveStoryCharCard);
   $("sc-delete").addEventListener("click", deleteStoryCharCard);
@@ -2059,14 +2549,65 @@ function setupEventListeners() {
     if (e.target === $("story-char-card-overlay")) $("story-char-card-overlay").classList.remove("open");
   });
 
-  //#260522 Red 小说模式：女主角选择 + 角色卡面板事件
-  $("heroine-select").addEventListener("change", () => {
-    state.novelHeroine = $("heroine-select").value;
+  //260523 Red 小说模式：角色现在从右上角角色库选择，此处无需绑定 select/add
+  //260523 Red 新故事按钮：打开故事设定面板
+  $("novel-new-story-btn").addEventListener("click", () => {
+    $("ns-hero-name").value    = state.novelHeroName;
+    $("ns-story-dir").value    = state.novelStoryDir;
+    autoResizeTextarea($("ns-story-dir"));
+    $("ns-pov").value          = state.novelPov;
+    $("ns-word-count").value   = state.novelWordCount;
+    $("ns-start-fav").value = state.novelFav;
+    // 回填阶段名称和上限
+    const nameInputs = [...document.querySelectorAll(".ns-stage-name")];
+    const capInputs  = [...document.querySelectorAll(".ns-stage-cap")];
+    state.novelStages.forEach((s, i) => {
+      if (nameInputs[i]) nameInputs[i].value = s.name;
+      if (capInputs[i])  capInputs[i].value  = i < 4 ? s.cap : "";
+    });
+    $("novel-setup-overlay").classList.add("open");
+    // 260523 Red 打开面板时对 textarea 触发一次自动高度
+    setTimeout(() => autoResizeTextarea($("ns-story-dir")), 0);
   });
-  $("heroine-card-btn").addEventListener("click", () => {
-    openHeroineCard(state.novelHeroine || null);
+  $("ns-story-dir").addEventListener("input", () => autoResizeTextarea($("ns-story-dir")));
+  $("novel-setup-cancel").addEventListener("click", () => {
+    $("novel-setup-overlay").classList.remove("open");
   });
-  $("heroine-add-btn").addEventListener("click", () => openHeroineCard(null));
+  $("novel-setup-confirm").addEventListener("click", () => {
+    state.novelHeroName  = $("ns-hero-name").value.trim() || "林然";
+    state.novelStoryDir  = $("ns-story-dir").value.trim();
+    state.novelPov       = $("ns-pov").value;
+    state.novelWordCount = parseInt($("ns-word-count").value) || 200;
+    state.novelFav       = parseInt($("ns-start-fav").value) || 0;
+    // 读取自定义阶段（名称 + 上限），留空则保留当前值
+    const names = [...document.querySelectorAll(".ns-stage-name")].map(el => el.value.trim());
+    const caps  = [...document.querySelectorAll(".ns-stage-cap")].map(el => parseInt(el.value) || 0);
+    const defaultStages = [
+      { name: "陌生人", cap: 20 }, { name: "相识", cap: 45 },
+      { name: "朋友",   cap: 70 }, { name: "暧昧", cap: 90 }, { name: "恋人", cap: 100 }
+    ];
+    state.novelStages = defaultStages.map((d, i) => ({
+      name: names[i] || d.name,
+      cap:  i < 4 ? (caps[i] || d.cap) : 100
+    }));
+    // 确保 cap 单调递增
+    for (let i = 1; i < 4; i++) {
+      if (state.novelStages[i].cap <= state.novelStages[i-1].cap)
+        state.novelStages[i].cap = state.novelStages[i-1].cap + 1;
+    }
+    state.novelStage = novelFavStage(state.novelFav);
+    updateNovelFavBar();
+    $("novel-setup-overlay").classList.remove("open");
+
+    //260523 Red 开场白：有则开新对话并插入首条 AI 消息
+    const heroine = (state.config.novel_heroines || {})[state.novelHeroine];
+    const opening = heroine?.opening?.trim();
+    if (opening) {
+      newChat();
+      // 稍等 newChat 清空后再渲染，避免时序问题
+      setTimeout(() => injectOpeningMessage(opening), 50);
+    }
+  });
   $("hc-cancel").addEventListener("click", () => $("heroine-card-overlay").classList.remove("open"));
   $("hc-save").addEventListener("click", saveHeroineCard);
   $("hc-delete").addEventListener("click", deleteHeroineCard);

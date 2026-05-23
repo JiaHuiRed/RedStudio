@@ -63,7 +63,7 @@
 
       <!-- 260522 Red 模式切换 pill：故事（角色扮演）/ 小说（互动写作） -->
       <div id="mode-tabs">
-        <button class="mode-tab active" data-mode="chat">故事</button>
+        <button class="mode-tab active" data-mode="rpg">RPG</button>
         <button class="mode-tab" data-mode="novel">小说</button>
       </div>
     </div>
@@ -93,38 +93,17 @@
       新建对话
     </button>
 
-    <!-- 260522 Red 故事模式：角色卡选择区（仅故事模式可见） -->
+    <!-- 260523 Red RPG 模式：开局创建按钮（仅 RPG 模式可见） -->
     <div id="story-char-section">
-      <div class="section-label">
-        <span>角色</span>
-        <button id="story-char-card-btn" class="model-refresh-btn" title="编辑角色卡">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-          </svg>
-        </button>
-      </div>
-      <div id="story-char-select-row">
-        <select id="story-char-select"><option value="">-- 选择角色 --</option></select>
-        <button id="story-char-add-btn" title="新建角色卡">+</button>
-      </div>
+      <div class="section-label"><span>角色 / 世界</span></div>
+      <button id="rpg-setup-btn">⚔ 创建角色 / 开始冒险</button>
     </div>
 
-    <!-- 260522 Red 小说模式：女主角选择区（仅小说模式可见） -->
+    <!-- 260523 Red 小说模式：简化区，角色从右上角角色库选择 -->
     <div id="novel-heroine-section">
-      <div class="section-label">
-        <span>女主角</span>
-        <button id="heroine-card-btn" class="model-refresh-btn" title="编辑角色卡">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-          </svg>
-        </button>
-      </div>
-      <div id="heroine-select-row">
-        <select id="heroine-select"><option value="">-- 选择角色 --</option></select>
-        <button id="heroine-add-btn" title="新建角色卡">+</button>
-      </div>
+      <div class="section-label"><span>女主角</span></div>
+      <div id="novel-heroine-tag" class="novel-heroine-tag">未选择角色</div>
+      <button id="novel-new-story-btn">▶ 开始新故事</button>
     </div>
 
     <!-- 历史搜索 -->
@@ -167,6 +146,15 @@
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
       </button>
+      <!-- 260523 Red 角色库按钮（侧边栏底部） -->
+      <button class="icon-btn" id="charlib-btn" title="角色库">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+      </button>
       <button class="icon-btn" id="settings-btn" title="设置">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <circle cx="12" cy="12" r="3"/>
@@ -190,8 +178,49 @@
         </svg>
       </button>
       <div id="sys-prompt-content">
-        <textarea id="sys-prompt-input" rows="3" placeholder="输入系统提示词（可选）…"></textarea>
+        <textarea id="sys-prompt-input" rows="3" placeholder="输入系统提示词（可选）…小说/RPG 模式下会追加到自动生成的提示词之后"></textarea>
       </div>
+    </div>
+
+    <!-- 260523 Red 作者注记栏：可折叠，内容插入 context 靠后位置，静默修正 AI 行为 -->
+    <div id="author-note-bar">
+      <button id="author-note-toggle">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+        </svg>
+        <span>作者注记</span>
+        <svg class="author-note-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+      <div id="author-note-content">
+        <textarea id="author-note-input" rows="2" placeholder="临时指令，插在 context 靠后位置（AI 会优先注意）…&#10;例：请保持文风克制，避免过度煽情"></textarea>
+        <div id="author-note-depth-row">
+          <span>插入深度（距末尾条数）</span>
+          <input id="author-note-depth" type="number" value="3" min="1" max="20">
+        </div>
+      </div>
+    </div>
+
+    <!-- 260523 Red RPG 模式多指标状态栏（仅 RPG 模式可见） -->
+    <div id="rpg-status-bar" class="hidden">
+      <span class="rpg-stat" id="rpg-hp">❤️ <strong id="rpg-hp-val">100</strong>/<span id="rpg-hp-max">100</span></span>
+      <span class="rpg-stat" id="rpg-mp">💙 <strong id="rpg-mp-val">50</strong>/<span id="rpg-mp-max">50</span></span>
+      <span class="rpg-stat-sep">·</span>
+      <span class="rpg-stat">⭐ Lv.<strong id="rpg-lv">1</strong></span>
+      <span class="rpg-stat">✨ <strong id="rpg-exp-val">0</strong>/<span id="rpg-exp-next">100</span></span>
+      <span class="rpg-stat-sep">·</span>
+      <span class="rpg-stat">💰 <strong id="rpg-gold">50</strong></span>
+      <span id="rpg-char-name-tag"></span>
+    </div>
+
+    <!-- 260523 Red 小说模式好感度状态栏（仅小说模式可见） -->
+    <div id="novel-status-bar" class="hidden">
+      <div id="novel-fav-track"><div id="novel-fav-fill"></div></div>
+      <span id="novel-fav-text">好感度 <strong id="novel-fav-value">0</strong></span>
+      <span class="novel-status-sep">·</span>
+      <span id="novel-stage-text">陌生人</span>
+      <span id="novel-fav-range" class="novel-status-sep" title="好感度区间"></span>
     </div>
 
     <!-- 消息区 / 欢迎页 -->
@@ -332,26 +361,6 @@
         <input type="number" id="s-tts-rate" min="-10" max="10" step="1" value="0" />
       </div>
     </div>
-    <!-- 260522 Red 小说模式设置 -->
-    <div class="settings-group">
-      <div class="settings-group-title">男主角设定（小说模式）</div>
-      <div class="settings-row"><label>姓名</label><input type="text" id="s-male-name" placeholder="林然" maxlength="20"/></div>
-      <div class="settings-row"><label>出生年份</label><input type="text" id="s-male-birth" placeholder="1999年" maxlength="20"/></div>
-      <div class="settings-row"><label>籍贯</label><input type="text" id="s-male-hometown" placeholder="浙江绍兴" maxlength="30"/></div>
-      <div class="settings-row"><label>身高</label><input type="text" id="s-male-height" placeholder="177cm" maxlength="10"/></div>
-      <div class="settings-row"><label>学历</label><input type="text" id="s-male-education" placeholder="浙大计算机研究生毕业（2026年5月）" maxlength="60"/></div>
-      <div class="settings-row"><label>外貌</label><input type="text" id="s-male-appearance" placeholder="帅（网红级别）" maxlength="40"/></div>
-      <div class="settings-row"><label>爱好</label><input type="text" id="s-male-hobbies" placeholder="篮球；周杰伦铁粉" maxlength="80"/></div>
-      <div class="settings-row"><label>固定朋友</label><input type="text" id="s-male-friends" placeholder="龚志强（大学室友）" maxlength="60"/></div>
-      <div class="settings-row"><label>职业背景</label><textarea id="s-male-career" rows="2" placeholder="2026年5月毕业，从找工作开始，后续合理推进…"></textarea></div>
-    </div>
-    <div class="settings-group">
-      <div class="settings-group-title">小说模式提示词模板</div>
-      <div class="settings-row" style="flex-direction:column;align-items:stretch">
-        <label style="margin-bottom:6px">粘贴你的完整 system prompt 模板（留空使用默认）</label>
-        <textarea id="s-novel-template" rows="8" placeholder="【总则】&#10;你是一个互动小说引擎……"></textarea>
-      </div>
-    </div>
     <div class="settings-group">
       <div class="settings-group-title">界面</div>
       <div class="settings-row">
@@ -454,6 +463,11 @@
         <label style="margin-bottom:6px">补充信息</label>
         <textarea id="hc-extra" rows="2" placeholder="人际关系、语言、其他细节…"></textarea>
       </div>
+      <!-- 260523 Red 开场白：故事开始时作为第一条 AI 消息插入，可含 [CHOICES] 块 -->
+      <div class="settings-row" style="flex-direction:column;align-items:stretch">
+        <label style="margin-bottom:4px">开场白 <span style="font-weight:400;color:var(--text-tertiary);font-size:11px">（开始新故事时自动作为 AI 第一条回复）</span></label>
+        <textarea id="hc-opening" rows="5" placeholder="直接写剧情正文，可附带 [CHOICES] 选项块（留空则由 AI 自动生成开头）"></textarea>
+      </div>
     </div>
     <div class="settings-actions" style="margin-top:16px">
       <button class="btn-secondary" id="hc-delete" style="margin-right:auto">删除</button>
@@ -467,6 +481,129 @@
 </div>
 
 <!-- 260521 Red marked.js / highlight.js 本地离线版 -->
+<!-- 260523 Red RPG 角色创建面板 -->
+<div id="rpg-setup-overlay" class="hidden">
+  <div id="rpg-setup-panel">
+    <h2>⚔ 开始冒险</h2>
+    <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px">
+      <label>世界 / 故事方向</label>
+      <textarea id="rpg-world-dir" rows="2" placeholder="例：黑暗奇幻大陆，魔王复苏，留白细节让 AI 随机填充"></textarea>
+    </div>
+    <div class="settings-row">
+      <label>角色名</label>
+      <input id="rpg-char-name" type="text" placeholder="随机生成可留空">
+    </div>
+    <div class="settings-row">
+      <label>职业</label>
+      <select id="rpg-char-class">
+        <option value="">随机职业</option>
+        <option value="战士">战士</option>
+        <option value="法师">法师</option>
+        <option value="游侠">游侠</option>
+        <option value="刺客">刺客</option>
+        <option value="圣骑士">圣骑士</option>
+        <option value="召唤师">召唤师</option>
+      </select>
+    </div>
+    <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px">
+      <label>背景故事（留空随机）</label>
+      <textarea id="rpg-char-bg" rows="2" placeholder="例：北境流亡者，家族被灭门，追查真相的复仇者"></textarea>
+    </div>
+    <div class="settings-group-title" style="font-size:12px;color:var(--text-secondary);margin:4px 0 6px">
+      战斗属性（各 5-20，影响初始 HP/MP 和战斗选项）
+    </div>
+    <div id="rpg-stats-grid">
+      <div class="rpg-stat-item"><label>力量</label><input class="rpg-stat-input" id="rpg-str" type="number" value="10" min="5" max="20"></div>
+      <div class="rpg-stat-item"><label>敏捷</label><input class="rpg-stat-input" id="rpg-agi" type="number" value="10" min="5" max="20"></div>
+      <div class="rpg-stat-item"><label>智力</label><input class="rpg-stat-input" id="rpg-int" type="number" value="10" min="5" max="20"></div>
+      <div class="rpg-stat-item"><label>体质</label><input class="rpg-stat-input" id="rpg-vit" type="number" value="10" min="5" max="20"></div>
+    </div>
+    <div class="settings-group-title" style="font-size:12px;color:var(--text-secondary);margin:8px 0 6px">
+      社交属性（Persona 5 风格，各 1-5，影响对话选项解锁）
+    </div>
+    <div id="rpg-social-grid">
+      <div class="rpg-stat-item"><label>知识</label><input class="rpg-stat-input" id="rpg-knowledge" type="number" value="1" min="1" max="5"></div>
+      <div class="rpg-stat-item"><label>魅力</label><input class="rpg-stat-input" id="rpg-charm" type="number" value="1" min="1" max="5"></div>
+      <div class="rpg-stat-item"><label>胆识</label><input class="rpg-stat-input" id="rpg-guts" type="number" value="1" min="1" max="5"></div>
+      <div class="rpg-stat-item"><label>亲切</label><input class="rpg-stat-input" id="rpg-kindness" type="number" value="1" min="1" max="5"></div>
+      <div class="rpg-stat-item"><label>手艺</label><input class="rpg-stat-input" id="rpg-craft" type="number" value="1" min="1" max="5"></div>
+    </div>
+    <div class="settings-actions">
+      <button class="btn-secondary" id="rpg-setup-cancel">取消</button>
+      <button class="btn-primary" id="rpg-setup-confirm">出发！</button>
+    </div>
+  </div>
+</div>
+
+<!-- 260523 Red 小说新故事设定面板 -->
+<div id="novel-setup-overlay" class="hidden">
+  <div id="novel-setup-panel">
+    <h2>新故事设定</h2>
+    <div class="settings-row">
+      <label>主角名称</label>
+      <input type="text" id="ns-hero-name" placeholder="林然" maxlength="20"/>
+    </div>
+    <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px">
+      <label>故事方向 / 主角背景</label>
+      <textarea id="ns-story-dir" rows="3" placeholder="例：女明星恋爱故事，林然是她的经纪人。可在此补充主角的外貌、职业、性格等。"></textarea>
+    </div>
+    <div class="settings-row">
+      <label>叙事视角</label>
+      <select id="ns-pov">
+        <option value="first">第一人称（我 / 林然）</option>
+        <option value="second">第二人称（你 / 林然）</option>
+        <option value="third">第三人称（他 / 林然）</option>
+      </select>
+    </div>
+    <div class="settings-row">
+      <label>正文字数/轮</label>
+      <input id="ns-word-count" type="number" value="200" min="100" max="500" step="50">
+    </div>
+    <div class="settings-row">
+      <label>好感度起始值</label>
+      <input id="ns-start-fav" type="number" value="0" min="0" max="99" style="width:64px">
+    </div>
+    <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px">
+      <label>阶段划分（名称 · 上限值，共 5 段，上限依次递增至 100）</label>
+      <div id="ns-stages-table">
+        <div class="ns-stage-row"><input class="ns-stage-name" type="text" placeholder="阶段1名称"><input class="ns-stage-cap" type="number" placeholder="上限" min="1" max="99"></div>
+        <div class="ns-stage-row"><input class="ns-stage-name" type="text" placeholder="阶段2名称"><input class="ns-stage-cap" type="number" placeholder="上限" min="1" max="99"></div>
+        <div class="ns-stage-row"><input class="ns-stage-name" type="text" placeholder="阶段3名称"><input class="ns-stage-cap" type="number" placeholder="上限" min="1" max="99"></div>
+        <div class="ns-stage-row"><input class="ns-stage-name" type="text" placeholder="阶段4名称"><input class="ns-stage-cap" type="number" placeholder="上限" min="1" max="99"></div>
+        <div class="ns-stage-row"><input class="ns-stage-name" type="text" placeholder="阶段5名称"><span class="ns-stage-final">100</span></div>
+      </div>
+    </div>
+    <div class="settings-actions">
+      <button class="btn-secondary" id="novel-setup-cancel">取消</button>
+      <button class="btn-primary" id="novel-setup-confirm">开始故事</button>
+    </div>
+  </div>
+</div>
+
+<!-- 260523 Red 角色库 overlay -->
+<div id="charlib-overlay">
+  <div id="charlib-panel">
+    <div class="overlay-header">
+      <span>角色库</span>
+      <button class="overlay-close" id="charlib-close">✕</button>
+    </div>
+
+    <div id="charlib-tabs">
+      <button class="charlib-tab active" data-lib="novel">小说角色</button>
+      <button class="charlib-tab" data-lib="story">聊天角色</button>
+    </div>
+
+    <div id="charlib-list"></div>
+
+    <div id="charlib-footer">
+      <button id="charlib-new-btn">＋ 新建</button>
+      <div style="flex:1"></div>
+      <button id="charlib-import-btn">↑ 导入 JSON</button>
+      <button id="charlib-export-btn">↓ 导出 JSON</button>
+    </div>
+  </div>
+</div>
+
 <script src="marked.min.js"></script>
 <script src="highlight.min.js"></script>
 <script src="app.js"></script>
