@@ -904,6 +904,42 @@ body {
   color: #a78bfa;
 }
 
+/* 260523 Red 联网搜索按钮，激活态蓝色，搜索中脉冲 */
+#web-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--input-border);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+#web-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text-secondary);
+  border-color: var(--text-tertiary);
+}
+#web-btn.active {
+  background: rgba(30, 120, 220, 0.10);
+  border-color: rgba(30, 120, 220, 0.35);
+  color: #1e78dc;
+}
+#web-btn.searching {
+  animation: tts-pulse 0.8s ease-in-out infinite;
+  color: #1e78dc;
+  border-color: rgba(30, 120, 220, 0.5);
+}
+[data-theme="dark"] #web-btn.active {
+  background: rgba(59, 153, 252, 0.15);
+  border-color: rgba(59, 153, 252, 0.4);
+  color: #60a5fa;
+}
+
 /* 发送按钮 */
 #send-btn {
   width: 32px;

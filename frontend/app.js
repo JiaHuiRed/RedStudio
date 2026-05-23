@@ -298,6 +298,7 @@ const state = {
   // 260514 Red currentChatId: 当前会话在历史中的 id，null 表示尚未存入历史
   currentChatId: null,
   thinkingEnabled: false,
+  webSearchEnabled: false,
   // 260514 Red pendingAvatar: 设置面板中待保存的头像 data URL
   pendingAvatar: undefined,
   // 260515 Red 故事模式（角色扮演）
@@ -319,6 +320,7 @@ const userInputEl     = $("user-input");
 const sendBtn         = $("send-btn");
 const stopBtn         = $("stop-btn");
 const thinkBtn        = $("think-btn");
+const webBtn          = $("web-btn");
 const thinkStatus     = $("think-status");
 const modelSelect     = $("model-select");
 const titlebarTitle   = $("titlebar-title");
@@ -454,9 +456,33 @@ async function sendMessage() {
   // 260514 Red 移除欢迎页（若存在），首条消息发出后不再显示
   $("welcome")?.remove();
 
+  // 260523 Red 联网搜索：开启时先搜索，把结果注入到消息前面
+  let finalText = text;
+  if (state.webSearchEnabled) {
+    sendBtn.disabled = true;
+    webBtn.classList.add("searching");
+    try {
+      const raw = await bridgeCall("webSearch", text);
+      const data = JSON.parse(raw);
+      if (data.error) {
+        showError("联网搜索失败：" + data.error);
+      } else if (data.results && data.results.length > 0) {
+        const snippets = data.results.slice(0, 5).map((r, i) =>
+          `[${i+1}] ${r.title}\n${r.url}\n${r.content || r.snippet || ""}`
+        ).join("\n\n");
+        finalText = `[联网搜索结果]\n${snippets}\n\n[用户问题]\n${text}`;
+      }
+    } catch (e) {
+      showError("联网搜索异常：" + e);
+    } finally {
+      sendBtn.disabled = false;
+      webBtn.classList.remove("searching");
+    }
+  }
+
   // 添加用户消息
-  state.messages.push({ role: "user", content: text });
-  appendMessage("user", text, state.messages.length - 1);
+  state.messages.push({ role: "user", content: finalText });
+  appendMessage("user", text, state.messages.length - 1);  // 气泡显示原始文本
 
   userInputEl.value = "";
   autoResizeTextarea();
@@ -1124,6 +1150,7 @@ async function openSettings() {
   $("s-tts-engine").value = cfg.tts_engine || "edge";
   $("s-tts-rate").value = cfg.tts_rate ?? 0;
   $("s-mimo-api-key").value = cfg.mimo_api_key || "";
+  $("s-ollama-api-key").value = cfg.ollama_api_key || "";
   loadTtsVoices(cfg.tts_engine || "edge", cfg.tts_voice || "");
   $("s-chat-font-size").value = String(cfg.chat_font_size || 14);
 
@@ -1178,7 +1205,8 @@ function saveSettings() {
     tts_engine:    $("s-tts-engine").value,
     tts_voice:     $("s-tts-voice").value,
     tts_rate:      parseInt($("s-tts-rate").value) || 0,
-    mimo_api_key:  $("s-mimo-api-key").value.trim(),
+    mimo_api_key:    $("s-mimo-api-key").value.trim(),
+    ollama_api_key:  $("s-ollama-api-key").value.trim(),
     chat_font_size: parseInt($("s-chat-font-size").value) || 14,
     providers:      state.config.providers || {},
     provider_order: state.config.provider_order?.length
@@ -1939,6 +1967,12 @@ function setupEventListeners() {
     state.thinkingEnabled = !state.thinkingEnabled;
     thinkBtn.classList.toggle("active", state.thinkingEnabled);
     thinkStatus.classList.toggle("visible", state.thinkingEnabled);
+  });
+
+  //260523 Red 联网搜索切换
+  webBtn.addEventListener("click", () => {
+    state.webSearchEnabled = !state.webSearchEnabled;
+    webBtn.classList.toggle("active", state.webSearchEnabled);
   });
 
   $("settings-btn").addEventListener("click", openSettings);

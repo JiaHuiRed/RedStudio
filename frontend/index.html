@@ -211,6 +211,14 @@
     <div id="input-area">
       <div id="input-card">
         <textarea id="user-input" placeholder="输入消息…" rows="1"></textarea>
+        <!-- 260523 Red 联网搜索切换按钮，激活时蓝色高亮，发消息前自动调用 Ollama 搜索 -->
+        <button id="web-btn" title="联网搜索（Ollama）">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="2" y1="12" x2="22" y2="12"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+        </button>
         <!-- 260514 Red 思考模式切换按钮，激活时紫色高亮，向 API 传递 enable_thinking -->
         <button id="think-btn" title="思考模式">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -285,6 +293,17 @@
           <button type="button" class="btn-secondary" id="s-avatar-btn">选择图片</button>
           <button type="button" class="btn-secondary" id="s-avatar-clear">移除头像</button>
         </div>
+      </div>
+    </div>
+    <!-- 260523 Red 联网搜索设置 -->
+    <div class="settings-group">
+      <div class="settings-group-title">联网搜索</div>
+      <div class="settings-row">
+        <label>Ollama API Key</label>
+        <input type="password" id="s-ollama-api-key" placeholder="在 ollama.com 免费注册获取" />
+      </div>
+      <div class="settings-row" style="font-size:11px;color:var(--text-tertiary);padding-top:0">
+        <span>搜索结果注入上下文，适用于所有模型（DeepSeek / Qwen / Ollama 均可）</span>
       </div>
     </div>
     <div class="settings-group">

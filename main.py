@@ -468,6 +468,31 @@ class Bridge(QObject):
                 if gen == self._tts_generation[0]:
                     self.ttsDone.emit()
 
+    # ── 联网搜索 ──────────────────────────────────────────────────────────────
+
+    @Slot(str, result=str)
+    def webSearch(self, query: str) -> str:
+        #260523 Red Ollama 云端搜索 API，结果注入上下文；支持任意 AI 模型
+        import requests as _req
+        with self._config_lock:
+            api_key = self._config.get("ollama_api_key", "")
+        if not api_key:
+            return json.dumps({"error": "请在设置中填写 Ollama API Key（免费注册 ollama.com 获取）"})
+        try:
+            resp = _req.post(
+                "https://ollama.com/api/web_search",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={"query": query, "max_results": 5},
+                timeout=10,
+            )
+            if resp.status_code != 200:
+                return json.dumps({"error": f"搜索失败 {resp.status_code}：{resp.text[:100]}"})
+            return resp.text
+        except _req.exceptions.Timeout:
+            return json.dumps({"error": "搜索超时（10s），请检查网络"})
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
     # ── 窗口控制 ──────────────────────────────────────────────────────────────
     # 260521 Red Slot 直接在主线程执行，无需 Signal 中转（QWebChannel 槽调用已在主线程）
 
