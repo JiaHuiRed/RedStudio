@@ -955,6 +955,21 @@ body {
 }
 #stop-btn:hover { color: var(--danger); border-color: var(--danger); }
 #stop-btn.visible { display: block; }
+/* 260523 Red 停止朗读按钮，朗读中显示，橙色 */
+#tts-stop-btn {
+  display: none;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid #ff9f43;
+  background: transparent;
+  color: #ff9f43;
+  font-size: 11px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: var(--transition);
+}
+#tts-stop-btn:hover { background: rgba(255,159,67,0.12); }
+#tts-stop-btn.visible { display: block; }
 
 /* ═══════════════════════════════════════════════════════════
    设置面板（遮罩 + 卡片）

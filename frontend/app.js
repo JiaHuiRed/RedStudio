@@ -139,6 +139,7 @@ function speakMessage(btn, getText) {
     _ttsBtn = null;
     btn.classList.remove("speaking");
     bridge.ttsStop();
+    _hideTtsStopBtn();
     return;
   }
   // 停止上一条
@@ -151,8 +152,18 @@ function speakMessage(btn, getText) {
   if (!text) return;
   _ttsBtn = btn;
   btn.classList.add("speaking");
+  _showTtsStopBtn();
   // 260521 Red 直接调用桥接槽，ttsDone 信号会在朗读结束时恢复按钮
   bridge.ttsSpeak(text);
+}
+
+function _showTtsStopBtn() {
+  const b = $("tts-stop-btn");
+  if (b) b.classList.add("visible");
+}
+function _hideTtsStopBtn() {
+  const b = $("tts-stop-btn");
+  if (b) b.classList.remove("visible");
 }
 
 // 260521 Red ttsDone 信号处理：朗读结束后自动恢复按钮状态
@@ -161,6 +172,17 @@ function onTtsDone() {
     _ttsBtn.classList.remove("speaking");
     _ttsBtn = null;
   }
+  _hideTtsStopBtn();
+}
+
+// 260523 Red ttsError 信号处理：Edge TTS 出错时提示并清除状态
+function onTtsError(msg) {
+  if (_ttsBtn) {
+    _ttsBtn.classList.remove("speaking");
+    _ttsBtn = null;
+  }
+  _hideTtsStopBtn();
+  showError(msg);
 }
 
 // 为 AI 消息内容列添加"复制全文"和"朗读"按钮
@@ -1826,6 +1848,14 @@ function setupEventListeners() {
   $("new-chat-btn").addEventListener("click", newChat);
   sendBtn.addEventListener("click", sendMessage);
   stopBtn.addEventListener("click", stopGeneration);
+  $("tts-stop-btn").addEventListener("click", () => {
+    if (_ttsBtn) {
+      _ttsBtn.classList.remove("speaking");
+      _ttsBtn = null;
+    }
+    bridge.ttsStop();
+    _hideTtsStopBtn();
+  });
 
   userInputEl.addEventListener("keydown", e => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -1959,6 +1989,7 @@ new QWebChannel(qt.webChannelTransport, (channel) => {
   bridge.chatDone.connect(onChatDone);
   bridge.modelsReady.connect(onModelsReady);
   bridge.ttsDone.connect(onTtsDone);
+  bridge.ttsError.connect(onTtsError);
 
   init();
 });

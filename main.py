@@ -93,6 +93,7 @@ class Bridge(QObject):
     chatDone    = Signal()      # 流结束
     modelsReady = Signal(str)   # JSON: {"provider":..., "models":[...]} 或 {"error":...}
     ttsDone     = Signal()      # TTS 朗读完毕
+    ttsError    = Signal(str)   # TTS 出错（错误描述）
 
     def __init__(self, window, parent=None):
         super().__init__(parent)
@@ -303,6 +304,7 @@ class Bridge(QObject):
         try:
             import edge_tts
         except ImportError:
+            self.ttsError.emit("edge-tts 未安装，请运行 pip install edge-tts")
             return
         voice    = voice_id or "zh-CN-XiaoxiaoNeural"
         rate_str = f"{rate * 5:+d}%"
@@ -310,7 +312,20 @@ class Bridge(QObject):
         tmp_path = tmp.name
         tmp.close()
         try:
-            asyncio.run(edge_tts.Communicate(text, voice, rate=rate_str).save(tmp_path))
+            #260523 Red 加 15s 超时，防止网络不可用时卡死；超时抛 asyncio.TimeoutError
+            async def _fetch():
+                await asyncio.wait_for(
+                    edge_tts.Communicate(text, voice, rate=rate_str).save(tmp_path),
+                    timeout=15.0
+                )
+            try:
+                asyncio.run(_fetch())
+            except asyncio.TimeoutError:
+                self.ttsError.emit("Edge TTS 连接超时（15s），请检查网络或改用本地 SAPI")
+                return
+            except Exception as e:
+                self.ttsError.emit(f"Edge TTS 出错：{e}")
+                return
             mci   = ctypes.windll.winmm.mciSendStringW
             alias = "rds_tts"
             mci(f'open "{tmp_path}" alias {alias}', None, 0, None)
