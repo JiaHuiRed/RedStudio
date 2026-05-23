@@ -1427,7 +1427,7 @@ function windowCmd(action) {
   }
 }
 
-const RESIZE_MARGIN = 12;
+const RESIZE_MARGIN = 8; //260523 Red 与 main.py nativeEvent 边框宽度对齐，避免双系统值不一致
 function getResizeEdge(x, y) {
   const w = window.innerWidth;
   const h = window.innerHeight;

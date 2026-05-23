@@ -15,7 +15,7 @@ import sys
 import threading
 
 from PySide6.QtCore import QObject, Qt, QSize, QUrl, Signal, Slot
-from PySide6.QtGui import QGuiApplication, QIcon
+from PySide6.QtGui import QCursor, QGuiApplication, QIcon
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEngineScript
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -453,14 +453,15 @@ class MainWindow(QWebEngineView):
         if eventType == b"windows_generic_MSG":
             msg = ctypes.wintypes.MSG.from_address(int(message))
             if msg.message == 0x0084:  # WM_NCHITTEST
-                pt = ctypes.wintypes.POINT()
-                ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
+                #260523 Red 改用 QCursor.pos()（逻辑像素）替代 GetCursorPos（物理像素）
+                #           修复 Win11 DPI 缩放（125%/150%）导致边框检测坐标偏移的问题
+                cursor = QCursor.pos()
                 geo = self.frameGeometry()
-                x = pt.x - geo.x()
-                y = pt.y - geo.y()
+                x = cursor.x() - geo.x()
+                y = cursor.y() - geo.y()
                 w = geo.width()
                 h = geo.height()
-                b = 8  # 缩放边框像素
+                b = 8  # 缩放边框像素（与 JS RESIZE_MARGIN 对齐）
                 left   = x < b
                 right  = x > w - b
                 top    = y < b

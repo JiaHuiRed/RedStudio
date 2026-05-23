@@ -406,6 +406,7 @@ body {
 /* 历史列表 */
 #chat-history {
   flex: 1;
+  min-height: 0; /* 260523 Red 允许历史列表收缩，防止底部按钮被挤出 */
   overflow-y: auto;
   padding: 4px 7px;
 }
@@ -438,6 +439,7 @@ body {
 
 /* 侧边栏底部 */
 #sidebar-footer {
+  flex-shrink: 0; /* 260523 Red 底部工具栏不参与压缩，始终可见 */
   padding: 10px 14px;
   border-top: 1px solid var(--sidebar-border);
   display: flex;
