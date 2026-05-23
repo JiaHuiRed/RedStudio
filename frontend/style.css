@@ -168,6 +168,7 @@
 
 /* ── 全局重置 ────────────────────────────────────────────── */
 * { margin: 0; padding: 0; box-sizing: border-box; }
+html { height: 100%; }
 
 /* 260514 Red body 改为 flex-column：顶部 titlebar，下方 content(侧边栏+主区) */
 body {
@@ -250,8 +251,37 @@ body {
 /* hover 时按钮整组略微变暗，不显示符号 */
 #traffic-lights:hover .tl { filter: brightness(0.82); }
 
+/* ── 侧边栏折叠按钮 ────────────────────────────────────────── */
+/* 260522 Red 在交通灯右侧，垂直居中，鼠标悬停变色 */
+#sidebar-toggle {
+  position: absolute;
+  left: 78px;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+  z-index: 5;
+}
+#sidebar-toggle:hover {
+  color: var(--text-secondary);
+  background: var(--hover-bg);
+}
+/* 折叠后 chevron 翻转 */
+.sidebar-collapsed #sidebar-toggle .toggle-chevron {
+  transform: scaleX(-1);
+  transform-origin: center;
+}
+
 /* ── #content 包裹侧边栏+主区 ─────────────────────────────── */
 /* 260514 Red #content 横向 flex，占满剩余高度 */
+/* 侧边栏折叠时隐藏 */
 #content {
   flex: 1;
   display: flex;
@@ -261,8 +291,13 @@ body {
 
 /* ═══════════════════════════════════════════════════════════
    侧边栏
+   260522 Red 折叠态：translateX 滑出左侧，z-index 保持遮罩层分离
 ═══════════════════════════════════════════════════════════ */
 /* 260514 Red 侧边栏绝对定位叠在主内容上方，backdrop-filter 模糊背后聊天内容 */
+.sidebar-collapsed #sidebar {
+  transform: translateX(-100%);
+}
+
 #sidebar {
   position: absolute;
   top: 0;

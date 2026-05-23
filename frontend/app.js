@@ -331,6 +331,13 @@ async function init() {
   renderHistory();
 
   renderStatsInline();
+
+  // 260522 Red 恢复侧边栏折叠状态
+  state.sidebarCollapsed = !!cfg.sidebar_collapsed;
+  if (state.sidebarCollapsed) {
+    document.body.classList.add("sidebar-collapsed");
+  }
+
   setupEventListeners();
 }
 
@@ -1427,60 +1434,39 @@ function windowCmd(action) {
   }
 }
 
-const RESIZE_MARGIN = 8; //260523 Red 与 main.py nativeEvent 边框宽度对齐，避免双系统值不一致
-function getResizeEdge(x, y) {
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-  let edge = 0;
-  if (x < RESIZE_MARGIN)        edge |= 1;
-  if (x > w - RESIZE_MARGIN)    edge |= 2;
-  if (y < RESIZE_MARGIN)        edge |= 4;
-  if (y > h - RESIZE_MARGIN)    edge |= 8;
-  return edge;
-}
-
-function setupWindowResize() {
-  function edgeCursor(edge) {
-    if (edge === 5 || edge === 10) return "nwse-resize";
-    if (edge === 6 || edge === 9)  return "nesw-resize";
-    if (edge & 3)  return "ew-resize";
-    if (edge & 12) return "ns-resize";
-    return "";
-  }
-  let lastCursor = "";
-  document.addEventListener("mousemove", (e) => {
-    const c = edgeCursor(getResizeEdge(e.clientX, e.clientY));
-    if (c !== lastCursor) {
-      lastCursor = c;
-      document.documentElement.style.cursor = c || "";
-    }
-  });
-  document.addEventListener("mousedown", (e) => {
-    if (e.button !== 0) return;
-    const edge = getResizeEdge(e.clientX, e.clientY);
-    if (!edge) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    // 260521 Red 直接调用桥接槽，不再需要 fetch
-    bridge.startResize(edge);
-  }, true);
-}
+// 260522 Red 窗口缩放由 WM_NCHITTEST 原生处理，JS 无需干预
 
 function setupTitlebarDrag() {
   const titlebar = $("titlebar");
   if (!titlebar) return;
+  const RESIZE_MARGIN = 12;
+
+  // 260522 Red 折叠键和交通灯都不触发拖拽
+  const noDrag = "#traffic-lights, #sidebar-toggle";
 
   titlebar.addEventListener("mousedown", (e) => {
-    if (e.target.closest("#traffic-lights")) return;
+    if (e.target.closest(noDrag)) return;
     if (e.button !== 0) return;
-    if (getResizeEdge(e.clientX, e.clientY)) return;
+    // 260522 Red 鼠标在窗口边缘时不触发拖拽
+    const w = document.documentElement.clientWidth || 0;
+    const h = document.documentElement.clientHeight || 0;
+    if (e.clientX < RESIZE_MARGIN || e.clientX > w - RESIZE_MARGIN ||
+        e.clientY < RESIZE_MARGIN || e.clientY > h - RESIZE_MARGIN) return;
     bridge.startMove();
   });
 
   titlebar.addEventListener("dblclick", (e) => {
-    if (e.target.closest("#traffic-lights")) return;
+    if (e.target.closest(noDrag)) return;
     bridge.toggleMaximize();
   });
+}
+
+// 260522 Red 侧边栏折叠切换
+function toggleSidebar() {
+  state.sidebarCollapsed = !state.sidebarCollapsed;
+  document.body.classList.toggle("sidebar-collapsed", state.sidebarCollapsed);
+  // 持久化到配置
+  bridge.saveConfig(JSON.stringify({ sidebar_collapsed: state.sidebarCollapsed }));
 }
 
 // ─── 提示词库 ────────────────────────────────────────────────────────────────
@@ -1824,9 +1810,9 @@ function setupEventListeners() {
   $("btn-close")   .addEventListener("click", () => bridge.closeWindow());
   $("btn-minimize").addEventListener("click", () => bridge.minimize());
   $("btn-maximize").addEventListener("click", () => bridge.toggleMaximize());
+  $("sidebar-toggle").addEventListener("click", toggleSidebar);
 
   setupTitlebarDrag();
-  setupWindowResize();
 
   $("provider-select").addEventListener("change", () => switchProvider($("provider-select").value));
 
