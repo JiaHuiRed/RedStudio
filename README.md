@@ -3,12 +3,12 @@
 > **轻量本地 AI 对话桌面客户端，支持 Ollama 本地模型与任意 OpenAI 兼容云端 API。**
 > 作者：Red · 基于 PySide6 + QWebChannel 构建，无 Flask 无 HTTP 层。
 
-[![版本](https://img.shields.io/badge/版本-v3.3.2-blue)](CHANGELOG.md)
+[![版本](https://img.shields.io/badge/版本-v3.3.4-blue)](CHANGELOG.md)
 [![平台](https://img.shields.io/badge/平台-Windows%2010%2F11-0078d4)](https://github.com/JiaHuiRed/RedStudio)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab)](https://python.org)
 [![PySide6](https://img.shields.io/badge/PySide6-6.x-41cd52)](https://doc.qt.io/qtforpython)
-[![AI支持](https://img.shields.io/badge/AI-DeepSeek%20%7C%20Qwen%20%7C%20Ollama-ff6b35)](https://ollama.com)
-[![TTS](https://img.shields.io/badge/TTS-Edge%20Neural-9b59b6)](https://github.com/rany2/edge-tts)
+[![AI支持](https://img.shields.io/badge/AI-DeepSeek%20%7C%20Qwen%20%7C%20Claude%20%7C%20Ollama-ff6b35)](https://ollama.com)
+[![TTS](https://img.shields.io/badge/TTS-MiMo%20%7C%20Edge%20%7C%20SAPI-9b59b6)](https://github.com/rany2/edge-tts)
 [![主题](https://img.shields.io/badge/主题-5种-e67e22)](https://github.com/JiaHuiRed/RedStudio)
 [![许可证](https://img.shields.io/badge/许可证-MIT-lightgrey)](LICENSE)
 
@@ -16,7 +16,7 @@
 
 ## ✨ 这是什么？
 
-面向 DeepSeek / Qwen / Ollama 等大模型 API 的 Windows 桌面对话客户端。支持故事模式角色扮演、小说互动写作、流式输出、Markdown 渲染、TTS 朗读等功能。
+面向 DeepSeek / Qwen / Claude / Ollama 等大模型 API 的 Windows 桌面对话客户端。支持 RPG 角色扮演、小说互动写作（好感度系统、选项按钮、开场白）、流式输出、Markdown 渲染、TTS 朗读等功能。
 
 ---
 
@@ -31,20 +31,21 @@
 - ⏹ **停止生成**：流式输出过程中可随时中断
 - 📋 **消息复制 / 朗读**：每条 AI 回复提供复制全文和 TTS 朗读按钮
 
-## 🎭 故事模式（角色扮演）
+## 🎮 RPG 模式（角色扮演）
 
-- 侧边栏切换 **故事 / 小说** 双模式
-- **角色卡系统**：姓名、身份/称谓、外貌、性格、语言风格、爱好、与主角关系、背景故事，自动拼入系统提示词
-- 多角色卡管理（增/删/改），对话级别记忆当前选中角色卡
-- AI 回复自动解析 `[角色名]` 前缀，每个角色独立彩色头像
-- 支持上传自定义角色头像，末尾选项渲染为可点击按钮
+- 女神异闻录风格 DM 驱动世界生成，支持战斗 + 社交双轨叙事
+- **角色创建**：职业、属性（力量/敏捷/智力/体力）、P5 社交能力（知识/魅力/胆量/善良/手艺）
+- **多指标状态栏**：HP / MP / Lv / EXP / GOLD 实时同步，AI 通过 `[STATUS]` 块更新
+- **角色卡**（聊天模式）：自动拼入系统提示词，支持 SillyTavern PNG 导入
 
 ## 📖 小说模式（互动写作）
 
-- **女主角角色卡**：姓名、出生日期、身高、身材体型、外貌描述、性格关键词、语言风格、爱好、出身/身份、当前状态，CRUD 管理（适用于任意女性角色）
-- **男主角设定**：在设置面板中填写姓名、籍贯、外貌等字段
-- **小说提示词模板**：粘贴完整 system prompt，角色卡与主角设定自动拼接后发送
-- AI 回复自动解析编号选项（1–4），渲染为可点击的章回选项按钮
+- **角色库**：侧边栏底部一键打开，管理小说/聊天两类角色，支持 JSON 导出/导入
+- **女主角角色卡**：姓名、身材、外貌、性格、语言风格、爱好、出身、**开场白**（自动作为首条 AI 回复）
+- **好感度系统**：0–100 进度条 + 阶段标签（5 段全部自定义），选项按钮附带 `+N/-N` 变化徽章
+- **章回选项**：`[CHOICES]` 块渲染为带好感度徽章的可点击按钮，自由输入时 `[FAV:N]` 自动更新
+- **作者注记**：可折叠，插入 context 末尾靠后位置，静默修正 AI 行为
+- **新故事设定**：主角名称、故事方向、叙事视角（一/二/三人称）、字数、好感起始值
 
 ## 📊 Token 统计
 
@@ -54,8 +55,9 @@
 
 ## 🔊 TTS 朗读
 
-- **Edge TTS**（默认）：微软神经网络声线，28 个中文声线，在线可用
-- **Windows SAPI**：系统内置，免费、离线
+- **小米 MiMo TTS**：限时免费，4 个中文声线，需填 API Key（platform.xiaomimimo.com）
+- **Edge TTS**：微软神经网络，28 个中文声线，在线可用
+- **Windows SAPI**：系统内置，离线免费
 - 可切换声线、调节语速（-10 最慢 ~ 10 最快）
 
 ## 🪟 界面与窗口
@@ -149,7 +151,7 @@ Ollama 运行后，在应用中选择 Ollama Provider，点击刷新图标自动
 | 前端 | 原生 HTML / CSS / JavaScript |
 | Markdown | marked.js v4（本地离线） |
 | 代码高亮 | highlight.js v11（本地离线） |
-| TTS | Edge TTS（神经网络）/ Windows SAPI（离线） |
+| TTS | 小米 MiMo / Edge TTS（神经网络）/ Windows SAPI（离线） |
 | 配置 / 历史 | JSON 文件（`~/.aistory/`） |
 
 ---
