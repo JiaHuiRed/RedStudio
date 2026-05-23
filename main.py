@@ -52,6 +52,14 @@ _EDGE_TO_HT = {
     10: 17,  # HTBOTTOMRIGHT
 }
 
+#260523 Red 小米 MiMo TTS 声线列表（v2.5，限时免费）
+_MIMO_TTS_VOICES = [
+    {"id": "冰糖", "name": "冰糖（普通话·女）甜美"},
+    {"id": "茉莉", "name": "茉莉（普通话·女）温柔"},
+    {"id": "苏打", "name": "苏打（普通话·男）"},
+    {"id": "白桦", "name": "白桦（普通话·男）沉稳"},
+]
+
 # //#260521 Red Edge TTS 精选声线列表（无需联网查询，直接内置）
 _EDGE_TTS_VOICES = [
     {"id": "zh-CN-XiaoxiaoNeural",         "name": "晓晓（普通话·女）温柔"},
@@ -273,8 +281,9 @@ class Bridge(QObject):
         engine   = c.get("tts_engine", "edge")
         voice_id = c.get("tts_voice", "")
         rate     = int(c.get("tts_rate", 0))
+        api_key  = c.get("mimo_api_key", "")
         self._tts_generation[0] += 1
-        self._tts_queue.put((text[:2000], self._tts_generation[0], engine, voice_id, rate))
+        self._tts_queue.put((text[:2000], self._tts_generation[0], engine, voice_id, rate, api_key))
 
     @Slot()
     def ttsStop(self):
@@ -284,6 +293,8 @@ class Bridge(QObject):
     @Slot(str, result=str)
     def ttsVoices(self, engine: str) -> str:
         # //#260521 Red 按引擎返回声线列表：Edge TTS 返回内置列表，SAPI 查询系统声线
+        if engine == "mimo":
+            return json.dumps({"voices": _MIMO_TTS_VOICES})
         if engine == "edge":
             return json.dumps({"voices": _EDGE_TTS_VOICES})
         try:
@@ -346,6 +357,60 @@ class Bridge(QObject):
             except Exception:
                 pass
 
+    def _mimo_speak(self, text: str, gen: int, voice_id: str, api_key: str):
+        #260523 Red 小米 MiMo TTS：OpenAI 兼容接口，返回 base64 WAV，用 MCI 播放
+        import base64, os, tempfile, time
+        import requests as _req
+        voice = voice_id or "冰糖"
+        tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        tmp_path = tmp.name
+        tmp.close()
+        try:
+            resp = _req.post(
+                "https://api.xiaomimimo.com/v1/chat/completions",
+                headers={"api-key": api_key, "Content-Type": "application/json"},
+                json={
+                    "model": "mimo-v2.5-tts",
+                    "messages": [
+                        {"role": "assistant", "content": text}
+                    ],
+                    "audio": {"format": "wav", "voice": voice},
+                },
+                timeout=20,
+            )
+            if resp.status_code != 200:
+                self.ttsError.emit(f"MiMo TTS 错误 {resp.status_code}：{resp.text[:120]}")
+                return
+            data = resp.json()
+            audio_b64 = data["choices"][0]["message"]["audio"]["data"]
+            with open(tmp_path, "wb") as f:
+                f.write(base64.b64decode(audio_b64))
+            if gen != self._tts_generation[0]:
+                return
+            mci   = ctypes.windll.winmm.mciSendStringW
+            alias = "rds_tts"
+            mci(f'open "{tmp_path}" alias {alias}', None, 0, None)
+            mci(f'play {alias}', None, 0, None)
+            buf = ctypes.create_unicode_buffer(256)
+            while True:
+                if gen != self._tts_generation[0]:
+                    mci(f'stop {alias}', None, 0, None)
+                    break
+                mci(f'status {alias} mode', buf, 256, None)
+                if buf.value != 'playing':
+                    break
+                time.sleep(0.05)
+            mci(f'close {alias}', None, 0, None)
+        except _req.exceptions.Timeout:
+            self.ttsError.emit("MiMo TTS 连接超时（20s），请检查网络或 API Key")
+        except Exception as e:
+            self.ttsError.emit(f"MiMo TTS 出错：{e}")
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
     def _tts_worker(self):
         """在独立线程中串行处理朗读请求；COM 对象必须在使用它的线程中创建"""
         try:
@@ -368,11 +433,16 @@ class Bridge(QObject):
 
         cur_sapi_voice = ""
         while True:
-            text, gen, engine, voice_id, rate = self._tts_queue.get()
+            text, gen, engine, voice_id, rate, api_key = self._tts_queue.get()
             if gen != self._tts_generation[0]:
                 continue
             try:
-                if engine == "edge":
+                if engine == "mimo":
+                    if not api_key:
+                        self.ttsError.emit("请在设置中填写小米 MiMo API Key")
+                    else:
+                        self._mimo_speak(text, gen, voice_id, api_key)
+                elif engine == "edge":
                     self._edge_speak(text, gen, voice_id, rate)
                 else:
                     if _sapi is None:

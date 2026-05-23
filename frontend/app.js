@@ -1123,6 +1123,7 @@ async function openSettings() {
 
   $("s-tts-engine").value = cfg.tts_engine || "edge";
   $("s-tts-rate").value = cfg.tts_rate ?? 0;
+  $("s-mimo-api-key").value = cfg.mimo_api_key || "";
   loadTtsVoices(cfg.tts_engine || "edge", cfg.tts_voice || "");
   $("s-chat-font-size").value = String(cfg.chat_font_size || 14);
 
@@ -1142,6 +1143,10 @@ async function openSettings() {
 }
 
 async function loadTtsVoices(engine = "edge", selectedId = "") {
+  //260523 Red 切换引擎时控制 MiMo API Key 行显隐
+  const keyRow = $("s-mimo-key-row");
+  if (keyRow) keyRow.style.display = engine === "mimo" ? "" : "none";
+
   const sel = $("s-tts-voice");
   if (!sel) return;
   try {
@@ -1170,9 +1175,10 @@ function saveSettings() {
     ai_avatar: state.pendingAvatar !== undefined
       ? state.pendingAvatar
       : (state.config.ai_avatar || ""),
-    tts_engine: $("s-tts-engine").value,
-    tts_voice:  $("s-tts-voice").value,
-    tts_rate:   parseInt($("s-tts-rate").value) || 0,
+    tts_engine:    $("s-tts-engine").value,
+    tts_voice:     $("s-tts-voice").value,
+    tts_rate:      parseInt($("s-tts-rate").value) || 0,
+    mimo_api_key:  $("s-mimo-api-key").value.trim(),
     chat_font_size: parseInt($("s-chat-font-size").value) || 14,
     providers:      state.config.providers || {},
     provider_order: state.config.provider_order?.length

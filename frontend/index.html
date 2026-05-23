@@ -292,9 +292,15 @@
       <div class="settings-row">
         <label>引擎</label>
         <select id="s-tts-engine" onchange="loadTtsVoices(this.value)">
+          <option value="mimo">小米 MiMo TTS（在线·限时免费）</option>
           <option value="edge">Edge TTS（在线·神经网络）</option>
           <option value="sapi">Windows SAPI（离线）</option>
         </select>
+      </div>
+      <!-- 260523 Red 小米 MiMo API Key，仅 mimo 引擎时显示 -->
+      <div class="settings-row" id="s-mimo-key-row" style="display:none">
+        <label>MiMo API Key</label>
+        <input type="password" id="s-mimo-api-key" placeholder="在 platform.xiaomimimo.com 获取" />
       </div>
       <div class="settings-row">
         <label>声线</label>
