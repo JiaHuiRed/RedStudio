@@ -1841,7 +1841,7 @@ function openStoryCharCard(name) {
   $("sc-identity").value     = c.identity     || (isNew ? "猫耳女仆" : "");
   $("sc-appearance").value   = c.appearance   || (isNew ? "银发、紫眸、猫耳" : "");
   $("sc-personality").value  = c.personality  || (isNew ? "傲娇、温柔" : "");
-  $("sc-speech").value       = c.speech       || (isNew ? "自称"本小姐"、句末加"喵"" : "");
+  $("sc-speech").value       = c.speech       || (isNew ? "自称「本小姐」、句末加「喵」" : "");
   $("sc-hobbies").value      = c.hobbies      || (isNew ? "读书、弹琴" : "");
   $("sc-relationship").value = c.relationship || (isNew ? "青梅竹马" : "");
   $("sc-background").value   = c.background   || "";
