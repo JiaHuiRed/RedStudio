@@ -3,9 +3,13 @@
 > **轻量本地 AI 对话桌面客户端，支持 Ollama 本地模型与任意 OpenAI 兼容云端 API。**
 > 作者：Red · 基于 PySide6 + QWebChannel 构建，无 Flask 无 HTTP 层。
 
-[![版本](https://img.shields.io/badge/版本-v3.3.1-blue)](CHANGELOG.md)
-[![平台](https://img.shields.io/badge/平台-Windows%2010%2F11-lightblue)](https://github.com/JiaHuiRed/RedStudio)
-[![Python](https://img.shields.io/badge/Python-3.10%2B-yellow)](https://python.org)
+[![版本](https://img.shields.io/badge/版本-v3.3.2-blue)](CHANGELOG.md)
+[![平台](https://img.shields.io/badge/平台-Windows%2010%2F11-0078d4)](https://github.com/JiaHuiRed/RedStudio)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab)](https://python.org)
+[![PySide6](https://img.shields.io/badge/PySide6-6.x-41cd52)](https://doc.qt.io/qtforpython)
+[![AI支持](https://img.shields.io/badge/AI-DeepSeek%20%7C%20Qwen%20%7C%20Ollama-ff6b35)](https://ollama.com)
+[![TTS](https://img.shields.io/badge/TTS-Edge%20Neural-9b59b6)](https://github.com/rany2/edge-tts)
+[![主题](https://img.shields.io/badge/主题-5种-e67e22)](https://github.com/JiaHuiRed/RedStudio)
 [![许可证](https://img.shields.io/badge/许可证-MIT-lightgrey)](LICENSE)
 
 ---
