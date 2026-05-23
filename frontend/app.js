@@ -1670,15 +1670,17 @@ function openHeroineCard(name) {
   const heroines = state.config.novel_heroines || {};
   const h = name ? (heroines[name] || {}) : {};
   $("heroine-card-title").textContent = name ? `编辑 — ${name}` : "新建角色卡";
-  $("hc-name").value        = h.name        || "";
-  $("hc-birth").value       = h.birth       || "";
-  $("hc-height").value      = h.height      || "";
-  $("hc-figure").value      = h.figure      || "";
-  $("hc-appearance").value  = h.appearance  || "";
-  $("hc-personality").value = h.personality || "";
-  $("hc-speech").value      = h.speech      || "";
-  $("hc-hobbies").value     = h.hobbies     || "";
-  $("hc-origin").value      = h.origin      || "";
+  //260523 Red 新建时填入示例默认值，方便直接修改而不用从空白开始
+  const isNew = !name;
+  $("hc-name").value        = h.name        || (isNew ? "林晓柔" : "");
+  $("hc-birth").value       = h.birth       || (isNew ? "2000年3月15日" : "");
+  $("hc-height").value      = h.height      || (isNew ? "165cm" : "");
+  $("hc-figure").value      = h.figure      || (isNew ? "苗条、纤细、长腿" : "");
+  $("hc-appearance").value  = h.appearance  || (isNew ? "长发、杏眼、气质出众" : "");
+  $("hc-personality").value = h.personality || (isNew ? "开朗、温柔、有主见" : "");
+  $("hc-speech").value      = h.speech      || (isNew ? "说话温和、偶尔毒舌" : "");
+  $("hc-hobbies").value     = h.hobbies     || (isNew ? "读书、跑步、做饭" : "");
+  $("hc-origin").value      = h.origin      || (isNew ? "大学生、职场新人" : "");
   $("hc-schedule").value    = h.schedule    || "";
   $("hc-extra").value       = h.extra       || "";
   $("hc-delete").style.display = name ? "" : "none";
@@ -1729,6 +1731,62 @@ function deleteHeroineCard() {
   $("heroine-card-overlay").classList.remove("open");
 }
 
+// ─── SillyTavern PNG 角色卡导入 ───────────────────────────────────────────────
+//260523 Red 解析 PNG tEXt 块，提取 keyword='chara' 的 base64 JSON
+async function parseTavernPng(file) {
+  const buf = await file.arrayBuffer();
+  const view = new DataView(buf);
+  // 校验 PNG 签名
+  if (view.getUint32(0) !== 0x89504e47) return null;
+  let offset = 8;
+  while (offset + 12 <= view.byteLength) {
+    const length = view.getUint32(offset);
+    const type = String.fromCharCode(
+      view.getUint8(offset+4), view.getUint8(offset+5),
+      view.getUint8(offset+6), view.getUint8(offset+7)
+    );
+    if (type === "tEXt" && length > 0) {
+      const data = new Uint8Array(buf, offset + 8, length);
+      const nullIdx = data.indexOf(0);
+      if (nullIdx > 0) {
+        const keyword = new TextDecoder().decode(data.slice(0, nullIdx));
+        if (keyword === "chara") {
+          try {
+            const b64 = new TextDecoder("latin1").decode(data.slice(nullIdx + 1));
+            return JSON.parse(atob(b64));
+          } catch { return null; }
+        }
+      }
+    }
+    if (type === "IEND") break;
+    offset += 12 + length;
+  }
+  return null;
+}
+
+//260523 Red 将 SillyTavern 字段映射到女主角卡或故事角色卡
+function fillHeroineFromTavern(card) {
+  $("hc-name").value        = card.name        || "";
+  $("hc-appearance").value  = (card.description || "").slice(0, 100);
+  $("hc-personality").value = (card.personality || "").slice(0, 100);
+  $("hc-speech").value      = "";
+  $("hc-hobbies").value     = "";
+  $("hc-origin").value      = (card.scenario || "").slice(0, 150);
+  $("hc-schedule").value    = (card.first_mes  || "").slice(0, 300);
+  $("hc-extra").value       = (card.creator_notes || card.system_prompt || "").slice(0, 300);
+}
+
+function fillStoryCharFromTavern(card) {
+  $("sc-name").value         = card.name        || "";
+  $("sc-appearance").value   = (card.description || "").slice(0, 100);
+  $("sc-personality").value  = (card.personality || "").slice(0, 100);
+  $("sc-speech").value       = "";
+  $("sc-hobbies").value      = "";
+  $("sc-relationship").value = "";
+  $("sc-background").value   = (card.scenario   || "").slice(0, 300);
+  $("sc-extra").value        = (card.creator_notes || card.system_prompt || "").slice(0, 300);
+}
+
 // ─── 故事模式角色卡 ───────────────────────────────────────────────────────────
 //#260522 Red 将故事模式角色卡内容注入系统提示词（卡片放在手动 prompt 之前）
 function buildChatSystemPrompt() {
@@ -1777,13 +1835,15 @@ function openStoryCharCard(name) {
   const cards = state.config.story_char_cards || {};
   const c = name ? (cards[name] || {}) : {};
   $("story-char-card-title").textContent = name ? `编辑 — ${name}` : "新建角色卡";
-  $("sc-name").value         = c.name         || "";
-  $("sc-identity").value     = c.identity     || "";
-  $("sc-appearance").value   = c.appearance   || "";
-  $("sc-personality").value  = c.personality  || "";
-  $("sc-speech").value       = c.speech       || "";
-  $("sc-hobbies").value      = c.hobbies      || "";
-  $("sc-relationship").value = c.relationship || "";
+  //260523 Red 新建时填入示例默认值
+  const isNew = !name;
+  $("sc-name").value         = c.name         || (isNew ? "洛依" : "");
+  $("sc-identity").value     = c.identity     || (isNew ? "猫耳女仆" : "");
+  $("sc-appearance").value   = c.appearance   || (isNew ? "银发、紫眸、猫耳" : "");
+  $("sc-personality").value  = c.personality  || (isNew ? "傲娇、温柔" : "");
+  $("sc-speech").value       = c.speech       || (isNew ? "自称"本小姐"、句末加"喵"" : "");
+  $("sc-hobbies").value      = c.hobbies      || (isNew ? "读书、弹琴" : "");
+  $("sc-relationship").value = c.relationship || (isNew ? "青梅竹马" : "");
   $("sc-background").value   = c.background   || "";
   $("sc-extra").value        = c.extra        || "";
   $("sc-delete").style.display = name ? "" : "none";
@@ -1951,6 +2011,16 @@ function setupEventListeners() {
   $("sc-cancel").addEventListener("click", () => $("story-char-card-overlay").classList.remove("open"));
   $("sc-save").addEventListener("click", saveStoryCharCard);
   $("sc-delete").addEventListener("click", deleteStoryCharCard);
+  //260523 Red 故事模式 PNG 导入
+  $("sc-import-png").addEventListener("click", () => $("sc-import-file").click());
+  $("sc-import-file").addEventListener("change", async e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const card = await parseTavernPng(f);
+    if (!card) { showError("未找到酒馆角色卡数据，请确认是 SillyTavern 导出的 PNG"); return; }
+    fillStoryCharFromTavern(card);
+    e.target.value = "";
+  });
   $("story-char-card-overlay").addEventListener("click", e => {
     if (e.target === $("story-char-card-overlay")) $("story-char-card-overlay").classList.remove("open");
   });
@@ -1966,6 +2036,16 @@ function setupEventListeners() {
   $("hc-cancel").addEventListener("click", () => $("heroine-card-overlay").classList.remove("open"));
   $("hc-save").addEventListener("click", saveHeroineCard);
   $("hc-delete").addEventListener("click", deleteHeroineCard);
+  //260523 Red 小说模式 PNG 导入
+  $("hc-import-png").addEventListener("click", () => $("hc-import-file").click());
+  $("hc-import-file").addEventListener("change", async e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const card = await parseTavernPng(f);
+    if (!card) { showError("未找到酒馆角色卡数据，请确认是 SillyTavern 导出的 PNG"); return; }
+    fillHeroineFromTavern(card);
+    e.target.value = "";
+  });
   $("heroine-card-overlay").addEventListener("click", e => {
     if (e.target === $("heroine-card-overlay")) $("heroine-card-overlay").classList.remove("open");
   });
