@@ -49,13 +49,6 @@
   <!-- ── 侧边栏 ─────────────────────────────────────────────── -->
   <div id="sidebar">
     <div id="sidebar-header">
-      <div id="app-title">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-        </svg>
-        Red Studio
-      </div>
-
       <!-- 供应商选择 -->
       <div id="provider-select-wrap">
         <select id="provider-select"></select>
@@ -65,6 +58,11 @@
       <div id="mode-tabs">
         <button class="mode-tab active" data-mode="rpg">RPG</button>
         <button class="mode-tab" data-mode="novel">小说</button>
+        <button id="presets-trigger" title="快速预设">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+          </svg>
+        </button>
       </div>
     </div>
 
@@ -93,23 +91,9 @@
       新建对话
     </button>
 
-    <!-- 260525 Red 快速预设：一键切换模式+场景 -->
-    <div id="preset-section">
-      <div class="section-label"><span>快速预设</span></div>
-      <div id="preset-grid"></div>
-    </div>
-
-    <!-- 260523 Red RPG 模式：开局创建按钮（仅 RPG 模式可见） -->
-    <div id="story-char-section">
-      <div class="section-label"><span>角色 / 世界</span></div>
-      <button id="rpg-setup-btn">⚔ 创建角色 / 开始冒险</button>
-    </div>
-
-    <!-- 260523 Red 小说模式：简化区，角色从右上角角色库选择 -->
-    <div id="novel-heroine-section">
-      <div class="section-label"><span>女主角</span></div>
-      <div id="novel-heroine-tag" class="novel-heroine-tag">未选择角色</div>
-      <button id="novel-new-story-btn">▶ 开始新故事</button>
+    <!-- 合并模式专属区（RPG / 小说 共用） -->
+    <div id="mode-section">
+      <div id="mode-section-body"></div>
     </div>
 
     <!-- 历史搜索 -->
@@ -138,9 +122,10 @@
 
     <!-- 底部工具 -->
     <div id="sidebar-footer">
-      <button class="icon-btn" id="prompts-btn" title="提示词库">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+      <button class="icon-btn" id="knowledge-btn" title="知识库">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+          <line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="14" y2="11"/>
         </svg>
       </button>
       <button class="icon-btn" id="theme-btn" title="切换主题（亮色 / 护眼米 / 护眼绿 / 深蓝 / 纯黑）">
@@ -148,19 +133,9 @@
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
         </svg>
       </button>
-      <!-- 260515 Red 导出当前对话为 Markdown 文件 -->
       <button class="icon-btn" id="export-btn" title="导出对话">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-        </svg>
-      </button>
-      <!-- 260523 Red 角色库按钮（侧边栏底部） -->
-      <button class="icon-btn" id="charlib-btn" title="角色库">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-          <circle cx="9" cy="7" r="4"/>
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
         </svg>
       </button>
       <button class="icon-btn" id="settings-btn" title="设置">
@@ -572,13 +547,13 @@
       <input id="ns-start-fav" type="number" value="0" min="0" max="99" style="width:64px">
     </div>
     <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px">
-      <label>阶段划分（名称 · 上限值，共 5 段，上限依次递增至 100）</label>
+      <label>阶段划分（名称 · 上限 · 行为规则，共 5 段）</label>
       <div id="ns-stages-table">
-        <div class="ns-stage-row"><input class="ns-stage-name" type="text" placeholder="阶段1名称"><input class="ns-stage-cap" type="number" placeholder="上限" min="1" max="99"></div>
-        <div class="ns-stage-row"><input class="ns-stage-name" type="text" placeholder="阶段2名称"><input class="ns-stage-cap" type="number" placeholder="上限" min="1" max="99"></div>
-        <div class="ns-stage-row"><input class="ns-stage-name" type="text" placeholder="阶段3名称"><input class="ns-stage-cap" type="number" placeholder="上限" min="1" max="99"></div>
-        <div class="ns-stage-row"><input class="ns-stage-name" type="text" placeholder="阶段4名称"><input class="ns-stage-cap" type="number" placeholder="上限" min="1" max="99"></div>
-        <div class="ns-stage-row"><input class="ns-stage-name" type="text" placeholder="阶段5名称"><span class="ns-stage-final">100</span></div>
+        <div class="ns-stage-row"><input class="ns-stage-name" type="text" placeholder="阶段1名称"><input class="ns-stage-cap" type="number" placeholder="上限" min="1" max="99"><input class="ns-stage-rule" type="text" placeholder="此阶段AI行为约束…"></div>
+        <div class="ns-stage-row"><input class="ns-stage-name" type="text" placeholder="阶段2名称"><input class="ns-stage-cap" type="number" placeholder="上限" min="1" max="99"><input class="ns-stage-rule" type="text" placeholder="此阶段AI行为约束…"></div>
+        <div class="ns-stage-row"><input class="ns-stage-name" type="text" placeholder="阶段3名称"><input class="ns-stage-cap" type="number" placeholder="上限" min="1" max="99"><input class="ns-stage-rule" type="text" placeholder="此阶段AI行为约束…"></div>
+        <div class="ns-stage-row"><input class="ns-stage-name" type="text" placeholder="阶段4名称"><input class="ns-stage-cap" type="number" placeholder="上限" min="1" max="99"><input class="ns-stage-rule" type="text" placeholder="此阶段AI行为约束…"></div>
+        <div class="ns-stage-row"><input class="ns-stage-name" type="text" placeholder="阶段5名称"><span class="ns-stage-final">100</span><input class="ns-stage-rule" type="text" placeholder="此阶段AI行为约束…"></div>
       </div>
     </div>
     <div class="settings-actions">
@@ -609,6 +584,42 @@
       <button id="charlib-import-btn">↑ 导入 JSON</button>
       <button id="charlib-export-btn">↓ 导出 JSON</button>
     </div>
+  </div>
+</div>
+
+<!-- 260526 Red 知识库入口 overlay -->
+<div id="knowledge-overlay">
+  <div id="knowledge-panel">
+    <button class="knowledge-entry" id="knowledge-prompts">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+      </svg>
+      提示词库
+    </button>
+    <button class="knowledge-entry" id="knowledge-charlib">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+      角色库
+    </button>
+  </div>
+</div>
+
+<!-- 260526 Red 隐藏代理按钮，由动态 mode-section 触发 -->
+<button id="rpg-setup-btn" style="display:none"></button>
+<button id="novel-new-story-btn" style="display:none"></button>
+
+<!-- 260526 Red 快速预设 overlay -->
+<div id="presets-overlay">
+  <div id="presets-panel">
+    <div class="overlay-header">
+      <span>快速预设</span>
+      <button class="overlay-close" id="presets-close">✕</button>
+    </div>
+    <div id="presets-grid"></div>
   </div>
 </div>
 

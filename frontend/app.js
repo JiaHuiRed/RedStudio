@@ -326,11 +326,11 @@ const state = {
   novelStage:     "陌生人", // 当前阶段
   //260523 Red 完全自定义阶段：[{name, cap}]，cap 为该阶段好感上限，最后一段固定 100
   novelStages: [
-    { name: "陌生人", cap: 20 },
-    { name: "相识",   cap: 45 },
-    { name: "朋友",   cap: 70 },
-    { name: "暧昧",   cap: 90 },
-    { name: "恋人",   cap: 100 }
+    { name: "陌生人", cap: 20, rule: "保持礼貌距离，禁止任何肢体接触、暧昧动作和亲密话语" },
+    { name: "相识",   cap: 45, rule: "可有日常接触（握手、碰肩），限于普通朋友范畴，禁止暧昧" },
+    { name: "朋友",   cap: 70, rule: "友好亲近，可自然接触，禁止任何暧昧行为和亲密描写" },
+    { name: "暧昧",   cap: 90, rule: "可有明显暧昧互动（牵手、对视），禁止成人向描写" },
+    { name: "恋人",   cap: 100, rule: "可有亲密表达，视剧情自然推进，禁止无铺垫的成人向内容" }
   ],
   novelWordCount: 200,      // 每轮正文字数
   novelPov:       "second", // 叙事视角 first/second/third
@@ -935,7 +935,33 @@ function switchMode(mode, save = true) {
     ? "RPG 模式（可在此补充额外规则，留空使用默认 DM 框架）…"
     : "输入系统提示词（可选）…";
 
+  renderModeSection();
   if (save) postConfig({ last_mode: mode });
+}
+
+//260526 Red 渲染合并模式专属区（RPG / 小说共用 #mode-section）
+function renderModeSection() {
+  const body = $("mode-section-body");
+  if (!body) return;
+  const mode = state.mode;
+  body.innerHTML = "";
+  if (mode === "rpg") {
+    const label = document.createElement("div");
+    label.className = "mode-label";
+    label.textContent = "角色 / 世界";
+    body.appendChild(label);
+    const btn = document.createElement("button");
+    btn.className = "mode-action-btn rpg-start";
+    btn.textContent = "⚔ 创建角色 / 开始冒险";
+    btn.addEventListener("click", () => $("rpg-setup-btn")?.click());
+    body.appendChild(btn);
+  } else if (mode === "novel") {
+    const btn = document.createElement("button");
+    btn.className = "mode-action-btn novel-start";
+    btn.textContent = "▶ 开始新故事";
+    btn.addEventListener("click", () => $("novel-new-story-btn")?.click());
+    body.appendChild(btn);
+  }
 }
 
 function resizeImage(file, size = 64) {
@@ -1333,7 +1359,11 @@ function loadChat(chat) {
   state.novelFav            = chat.novelFav          ?? 10;
   state.novelStages = Array.isArray(chat.novelStages) && chat.novelStages[0]?.cap
     ? chat.novelStages.map(s => ({ ...s }))
-    : [ { name:"陌生人",cap:20 },{ name:"相识",cap:45 },{ name:"朋友",cap:70 },{ name:"暧昧",cap:90 },{ name:"恋人",cap:100 } ];
+    : [ { name:"陌生人",cap:20, rule:"保持礼貌距离，禁止任何肢体接触、暧昧动作和亲密话语" },
+        { name:"相识",  cap:45, rule:"可有日常接触（握手、碰肩），限于普通朋友范畴，禁止暧昧" },
+        { name:"朋友",  cap:70, rule:"友好亲近，可自然接触，禁止任何暧昧行为和亲密描写" },
+        { name:"暧昧",  cap:90, rule:"可有明显暧昧互动（牵手、对视），禁止成人向描写" },
+        { name:"恋人",  cap:100, rule:"可有亲密表达，视剧情自然推进，禁止无铺垫的成人向内容" } ];
   state.novelStage          = chat.novelStage        || novelFavStage(state.novelFav);
   state.novelWordCount      = chat.novelWordCount    || 200;
   state.novelPov            = chat.novelPov          || "second";
@@ -1829,14 +1859,8 @@ function buildNovelTurnReminder() {
   const stage  = state.novelStage;
   const stages = state.novelStages;
   const idx    = stages.findIndex(s => s.name === stage);
-  const STAGE_BEHAVIORS = [
-    "保持礼貌距离，禁止任何肢体接触、暧昧动作和亲密话语",
-    "可有日常接触（握手、碰肩），限于普通朋友范畴，禁止暧昧",
-    "友好亲近，可自然接触，禁止任何暧昧行为和亲密描写",
-    "可有明显暧昧互动（牵手、对视），禁止成人向描写",
-    "可有亲密表达，视剧情自然推进，禁止无铺垫的成人向内容"
-  ];
-  const behavior = STAGE_BEHAVIORS[Math.min(Math.max(idx, 0), STAGE_BEHAVIORS.length - 1)];
+  const cur    = stages[Math.min(Math.max(idx, 0), stages.length - 1)];
+  const behavior = cur?.rule || "遵守当前阶段的行为边界";
   const wc = state.novelWordCount || 200;
   return `【本轮规则核验 — 必须遵守】
 好感度：${fav}/100 · 当前阶段：${stage}
@@ -1869,9 +1893,22 @@ function applyNovelFavDelta(delta) {
   state.novelFav = Math.max(0, Math.min(100, state.novelFav + delta));
   state.novelStage = novelFavStage(state.novelFav);
   updateNovelFavBar();
+  showNovelFavFloat(delta);
   if (state.novelStage !== prevStage) {
     showNovelStageToast(state.novelStage);
   }
+}
+
+//260526 Red 好感度变化浮动动画
+function showNovelFavFloat(delta) {
+  const bar = $("novel-status-bar");
+  if (!bar) return;
+  const el = document.createElement("span");
+  el.className = "novel-fav-float" + (delta > 0 ? " pos" : " neg");
+  el.textContent = delta > 0 ? `+${delta}` : `${delta}`;
+  bar.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("show"));
+  setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 400); }, 1200);
 }
 
 //260523 Red 同步状态栏显示
@@ -1935,21 +1972,15 @@ function buildNovelSystemPrompt() {
                   : state.novelPov === "third" ? "第三人称（他/林然）"
                   : "第二人称（你/林然）";
 
-  //260525 Red 阶段行为边界：按阶段索引映射，超越当前阶段的行为严格禁止
+  //260525 Red 阶段行为边界：使用自定义阶段规则
   const stages     = state.novelStages;
   const stageIdx   = stages.findIndex(s => s.name === stage);
-  const STAGE_BEHAVIORS = [
-    "保持礼貌距离，禁止任何肢体接触、暧昧动作和亲密话语",
-    "可有日常接触（握手、碰肩），限于普通朋友范畴，禁止暧昧",
-    "友好亲近，可自然接触，禁止任何暧昧行为和亲密描写",
-    "可有明显暧昧互动（牵手、对视），禁止成人向描写",
-    "可有亲密表达，视剧情自然推进，禁止无铺垫的成人向内容"
-  ];
-  const behaviorRule = STAGE_BEHAVIORS[Math.min(Math.max(stageIdx, 0), STAGE_BEHAVIORS.length - 1)];
+  const cur        = stages[Math.min(Math.max(stageIdx, 0), stages.length - 1)];
+  const behaviorRule = cur?.rule || "遵守当前阶段的行为边界";
   const stageTableLines = stages.map((s, i) => {
     const lo = i === 0 ? 0 : stages[i - 1].cap + 1;
     const hi = s.cap;
-    const behavior = STAGE_BEHAVIORS[Math.min(i, STAGE_BEHAVIORS.length - 1)];
+    const behavior = s.rule || "遵守当前阶段的行为边界";
     const mark = s.name === stage ? " ◀ 当前" : "";
     return `${lo}-${hi} 【${s.name}】：${behavior}${mark}`;
   }).join("\n");
@@ -2057,7 +2088,7 @@ function renderNovelChapter(content, bubble, text) {
         btn.classList.add("selected");
         userInputEl.value = c.text;
         autoResizeTextarea();
-        userInputEl.focus();
+        setTimeout(() => sendMessage(), 300);
       };
       choicesDiv.appendChild(btn);
     });
@@ -2428,9 +2459,9 @@ function deleteStoryCharCard() {
 // ─── 角色库 ──────────────────────────────────────────────────────────────────
 let _charlibTab = "novel"; // "novel" | "story"
 
-//260525 Red 渲染快速预设按钮到 #preset-grid
+//260526 Red 渲染快速预设到 overlay #presets-grid
 function renderPresets() {
-  const grid = $("preset-grid");
+  const grid = $("presets-grid");
   if (!grid) return;
   grid.innerHTML = "";
   PRESETS.forEach(preset => {
@@ -2438,12 +2469,15 @@ function renderPresets() {
     btn.className = "preset-btn" + (state.activePreset === preset.id ? " active" : "");
     btn.textContent = preset.name;
     btn.title = preset.mode === "novel" ? "小说模式" : "RPG 模式";
-    btn.addEventListener("click", () => applyPreset(preset));
+    btn.addEventListener("click", () => {
+      applyPreset(preset);
+      $("presets-overlay").classList.remove("open");
+    });
     grid.appendChild(btn);
   });
 }
 
-//260525 Red 应用预设：切换模式、注入场景提示词
+//260526 Red 应用预设：切换模式、注入场景提示词
 function applyPreset(preset) {
   switchMode(preset.mode);
   if (preset.sysPrompt) {
@@ -2522,15 +2556,7 @@ function renderCharLib() {
 }
 
 function updateNovelHeroineTag() {
-  const tag = $("novel-heroine-tag");
-  if (!tag) return;
-  if (state.novelHeroine) {
-    tag.textContent = state.novelHeroine;
-    tag.classList.add("has-char");
-  } else {
-    tag.textContent = "未选择角色";
-    tag.classList.remove("has-char");
-  }
+  renderModeSection();
 }
 
 // ─── 事件绑定 ────────────────────────────────────────────────────────────────
@@ -2541,8 +2567,29 @@ function setupEventListeners() {
   $("btn-maximize").addEventListener("click", () => bridge.toggleMaximize());
   $("sidebar-toggle").addEventListener("click", toggleSidebar);
 
+  //260526 Red 预设 overlay
+  $("presets-trigger").addEventListener("click", () => {
+    renderPresets();
+    $("presets-overlay").classList.add("open");
+  });
+  $("presets-close").addEventListener("click", () => $("presets-overlay").classList.remove("open"));
+  $("presets-overlay").addEventListener("click", e => {
+    if (e.target === $("presets-overlay")) $("presets-overlay").classList.remove("open");
+  });
+
   $("compress-memory-btn").addEventListener("click", summarizeHistory);
-  $("charlib-btn").addEventListener("click", openCharLib);
+  $("knowledge-btn").addEventListener("click", () => $("knowledge-overlay").classList.add("open"));
+  $("knowledge-prompts").addEventListener("click", () => {
+    $("knowledge-overlay").classList.remove("open");
+    openPromptLib();
+  });
+  $("knowledge-charlib").addEventListener("click", () => {
+    $("knowledge-overlay").classList.remove("open");
+    openCharLib();
+  });
+  $("knowledge-overlay").addEventListener("click", e => {
+    if (e.target === $("knowledge-overlay")) $("knowledge-overlay").classList.remove("open");
+  });
   $("charlib-close").addEventListener("click", () => $("charlib-overlay").classList.remove("open"));
   $("charlib-overlay").addEventListener("click", e => {
     if (e.target === $("charlib-overlay")) $("charlib-overlay").classList.remove("open");
@@ -2764,9 +2811,11 @@ function setupEventListeners() {
     // 回填阶段名称和上限
     const nameInputs = [...document.querySelectorAll(".ns-stage-name")];
     const capInputs  = [...document.querySelectorAll(".ns-stage-cap")];
+    const ruleInputs = [...document.querySelectorAll(".ns-stage-rule")];
     state.novelStages.forEach((s, i) => {
       if (nameInputs[i]) nameInputs[i].value = s.name;
       if (capInputs[i])  capInputs[i].value  = i < 4 ? s.cap : "";
+      if (ruleInputs[i]) ruleInputs[i].value = s.rule || "";
     });
     $("novel-setup-overlay").classList.add("open");
     // 260523 Red 打开面板时对 textarea 触发一次自动高度
@@ -2782,16 +2831,21 @@ function setupEventListeners() {
     state.novelPov       = $("ns-pov").value;
     state.novelWordCount = parseInt($("ns-word-count").value) || 200;
     state.novelFav       = parseInt($("ns-start-fav").value) || 0;
-    // 读取自定义阶段（名称 + 上限），留空则保留当前值
+    // 读取自定义阶段（名称 + 上限 + 行为规则）
     const names = [...document.querySelectorAll(".ns-stage-name")].map(el => el.value.trim());
     const caps  = [...document.querySelectorAll(".ns-stage-cap")].map(el => parseInt(el.value) || 0);
+    const rules = [...document.querySelectorAll(".ns-stage-rule")].map(el => el.value.trim());
     const defaultStages = [
-      { name: "陌生人", cap: 20 }, { name: "相识", cap: 45 },
-      { name: "朋友",   cap: 70 }, { name: "暧昧", cap: 90 }, { name: "恋人", cap: 100 }
+      { name: "陌生人", cap: 20, rule: "保持礼貌距离，禁止任何肢体接触、暧昧动作和亲密话语" },
+      { name: "相识",   cap: 45, rule: "可有日常接触（握手、碰肩），限于普通朋友范畴，禁止暧昧" },
+      { name: "朋友",   cap: 70, rule: "友好亲近，可自然接触，禁止任何暧昧行为和亲密描写" },
+      { name: "暧昧",   cap: 90, rule: "可有明显暧昧互动（牵手、对视），禁止成人向描写" },
+      { name: "恋人",   cap: 100, rule: "可有亲密表达，视剧情自然推进，禁止无铺垫的成人向内容" }
     ];
     state.novelStages = defaultStages.map((d, i) => ({
       name: names[i] || d.name,
-      cap:  i < 4 ? (caps[i] || d.cap) : 100
+      cap:  i < 4 ? (caps[i] || d.cap) : 100,
+      rule: rules[i] || d.rule
     }));
     // 确保 cap 单调递增
     for (let i = 1; i < 4; i++) {
@@ -2828,7 +2882,6 @@ function setupEventListeners() {
     if (e.target === $("heroine-card-overlay")) $("heroine-card-overlay").classList.remove("open");
   });
 
-  $("prompts-btn").addEventListener("click", openPromptLib);
   $("prompts-overlay").addEventListener("click", e => {
     if (e.target === $("prompts-overlay")) closePromptLib();
   });

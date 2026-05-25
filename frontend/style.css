@@ -321,22 +321,9 @@ body {
 }
 
 #sidebar-header {
-  padding: 14px 14px 12px;
+  padding: 10px 14px 8px;
   border-bottom: 1px solid var(--sidebar-border);
 }
-
-#app-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  letter-spacing: -0.3px;
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  transition: color 0.18s;
-}
-#app-title svg { color: var(--accent); flex-shrink: 0; }
 
 /* 供应商下拉选择器 */
 #provider-select-wrap { margin-top: 8px; }
@@ -417,25 +404,167 @@ body {
 #new-chat-btn:hover  { background: var(--accent-hover); }
 #new-chat-btn:active { transform: scale(0.97); }
 
-/* 260525 Red 快速预设区 */
-#preset-section {
-  padding: 10px 14px;
+/* 260526 Red 预设触发按钮（模式标签旁） */
+#presets-trigger {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: auto;
+  transition: color 0.15s, background 0.15s;
+}
+#presets-trigger:hover {
+  color: var(--text-secondary);
+  background: var(--hover-bg);
+}
+
+/* 260526 Red 合并模式专属区 */
+#mode-section {
+  display: none;
+  padding: 8px 9px;
   border-bottom: 1px solid var(--sidebar-border);
 }
-#preset-grid {
+body[data-mode="rpg"] #mode-section,
+body[data-mode="novel"] #mode-section {
+  display: block;
+}
+#mode-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#mode-section-body .mode-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+#mode-section-body .mode-action-btn {
+  width: 100%;
+  padding: 6px 0;
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+#mode-section-body .mode-action-btn.rpg-start {
+  border: 1px solid #e67e22;
+  background: rgba(230,126,34,0.1);
+  color: #e67e22;
+}
+#mode-section-body .mode-action-btn.rpg-start:hover { background: #e67e22; color: #fff; }
+#mode-section-body .mode-action-btn.novel-start {
+  border: 1px solid var(--accent);
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+#mode-section-body .mode-action-btn.novel-start:hover { background: var(--accent); color: #fff; }
+/* 260526 Red 知识库入口 overlay */
+#knowledge-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+}
+#knowledge-overlay.open { display: flex; }
+#knowledge-panel {
+  background: var(--input-bg);
+  border-radius: var(--radius-xl);
+  padding: 20px;
+  width: 240px;
+  max-width: 92vw;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.knowledge-entry {
+  width: 100%;
+  padding: 14px 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--input-border);
+  background: var(--hover-bg);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-family: var(--font);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.knowledge-entry:hover {
+  background: var(--active-bg);
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+.knowledge-entry svg { flex-shrink: 0; }
+
+/* 260526 Red 预设 overlay */
+#presets-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+}
+#presets-overlay.open { display: flex; }
+#presets-panel {
+  background: var(--input-bg);
+  border-radius: var(--radius-xl);
+  padding: 20px;
+  width: 300px;
+  max-width: 92vw;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.28);
+}
+#presets-panel .overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+#presets-panel .overlay-header span {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+#presets-panel .overlay-close {
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 2px;
+}
+#presets-panel .overlay-close:hover { color: var(--text-primary); }
+#presets-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 5px;
-  margin-top: 6px;
+  gap: 8px;
 }
 .preset-btn {
   background: var(--hover-bg);
   border: 1px solid var(--input-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 13px;
   font-family: var(--font);
-  padding: 6px 4px;
+  padding: 12px 8px;
   cursor: pointer;
   text-align: center;
   line-height: 1.35;
@@ -1585,47 +1714,6 @@ body {
 }
 
 /* ── 260522 Red 角色选择区（故事模式侧边栏） ── */
-#story-char-section {
-  display: none;
-  padding: 0 9px 8px;
-  border-bottom: 1px solid var(--sidebar-border);
-}
-body[data-mode="rpg"] #story-char-section { display: block; }
-#story-char-select-row {
-  display: flex;
-  gap: 4px;
-  margin-top: 4px;
-}
-#story-char-select {
-  flex: 1;
-  padding: 5px 8px;
-  border-radius: 8px;
-  border: 1px solid var(--input-border);
-  background: var(--input-bg);
-  color: var(--text-primary);
-  font-size: 12px;
-  font-family: var(--font);
-  cursor: pointer;
-  outline: none;
-  min-width: 0;
-}
-#story-char-add-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  border: 1px solid var(--input-border);
-  background: var(--input-bg);
-  color: var(--text-secondary);
-  font-size: 16px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: color 0.12s, border-color 0.12s;
-}
-#story-char-add-btn:hover { color: var(--accent); border-color: var(--accent); }
-
 /* ── 260522 Red 故事模式角色卡面板 ── */
 #story-char-card-overlay {
   display: none;
@@ -1653,95 +1741,6 @@ body[data-mode="rpg"] #story-char-section { display: block; }
   font-weight: 600;
   color: var(--text-primary);
 }
-
-/* ── 260522 Red 女明星选择区（小说模式侧边栏） ── */
-#novel-heroine-section {
-  display: none;
-  padding: 0 9px 8px;
-  border-bottom: 1px solid var(--sidebar-border);
-}
-body[data-mode="novel"] #novel-heroine-section { display: block; }
-.novel-heroine-tag {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  padding: 3px 6px;
-  margin-bottom: 6px;
-  border-radius: 5px;
-  background: var(--hover-bg);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.novel-heroine-tag.has-char {
-  color: var(--accent);
-  background: var(--accent-subtle);
-}
-#heroine-select-row {
-  display: flex;
-  gap: 4px;
-  margin-top: 4px;
-}
-#heroine-select {
-  flex: 1;
-  padding: 5px 8px;
-  border-radius: 8px;
-  border: 1px solid var(--input-border);
-  background: var(--input-bg);
-  color: var(--text-primary);
-  font-size: 12px;
-  font-family: var(--font);
-  cursor: pointer;
-  outline: none;
-  min-width: 0;
-}
-#heroine-add-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  border: 1px solid var(--input-border);
-  background: var(--input-bg);
-  color: var(--text-secondary);
-  font-size: 16px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: color 0.12s, border-color 0.12s;
-}
-#heroine-add-btn:hover { color: var(--accent); border-color: var(--accent); }
-
-/* 260523 Red 新故事按钮 */
-#novel-new-story-btn {
-  width: 100%;
-  margin-top: 7px;
-  padding: 6px 0;
-  border-radius: 8px;
-  border: 1px solid var(--accent);
-  background: var(--accent-subtle);
-  color: var(--accent);
-  font-size: 12px;
-  font-family: var(--font);
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-#novel-new-story-btn:hover { background: var(--accent); color: #fff; }
-
-/* 260523 Red RPG 侧边栏按钮 */
-#rpg-setup-btn {
-  width: 100%;
-  margin-top: 7px;
-  padding: 6px 0;
-  border-radius: 8px;
-  border: 1px solid #e67e22;
-  background: rgba(230,126,34,0.1);
-  color: #e67e22;
-  font-size: 12px;
-  font-family: var(--font);
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-#rpg-setup-btn:hover { background: #e67e22; color: #fff; }
 
 /* 260523 Red RPG 状态栏 */
 #rpg-status-bar {
@@ -1865,6 +1864,7 @@ body[data-mode="novel"] #novel-heroine-section { display: block; }
   color: var(--text-secondary);
   background: var(--bg-secondary);
   flex-shrink: 0;
+  position: relative;
 }
 #novel-status-bar.hidden { display: none; }
 
@@ -1997,7 +1997,32 @@ body[data-mode="novel"] #novel-heroine-section { display: block; }
   width: 58px; text-align: center;
   font-size: 12px; color: var(--text-tertiary);
 }
-.ns-stage-name:focus, .ns-stage-cap:focus { border-color: var(--accent); }
+.ns-stage-rule {
+  flex: 1.5; min-width: 0;
+  padding: 5px 8px; border-radius: 6px;
+  border: 1px solid var(--input-border); background: var(--bg-primary);
+  color: var(--text-primary); font-size: 11px; font-family: var(--font); outline: none;
+}
+.ns-stage-name:focus, .ns-stage-cap:focus, .ns-stage-rule:focus { border-color: var(--accent); }
+
+/* 260526 Red 好感度变化浮动动画 */
+.novel-fav-float {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  font-size: 13px;
+  font-weight: 700;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(0);
+  transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+.novel-fav-float.pos { color: #34c759; }
+.novel-fav-float.neg { color: #ff3b30; }
+.novel-fav-float.show {
+  opacity: 1;
+  transform: translateY(-20px);
+}
 
 /* 小说章回选项按钮 */
 .novel-choices {
