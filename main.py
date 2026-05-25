@@ -1,7 +1,7 @@
 # author Red
-# @project  Red Studio  3.3.2
+# @project  Red Studio  3.4.0
 # @since    2026-05-14
-# @updated  2026-05-22
+# @updated  2026-05-25
 # 260521 Red QWebChannel 重构：移除 Flask HTTP 层，改用 Qt 直接桥接
 
 import copy
@@ -15,11 +15,11 @@ import sys
 import threading
 
 from PySide6.QtCore import QObject, Qt, QSize, QUrl, Signal, Slot
-from PySide6.QtGui import QGuiApplication, QIcon, QCursor
+from PySide6.QtGui import QGuiApplication, QIcon, QCursor, QRegion
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEngineScript
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QWidget
 
 import config as cfg
 from providers import ollama, openai_compat
@@ -38,19 +38,8 @@ FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
 # 260514 Red 历史对话持久化路径：~/.aistory/history.json
 _HISTORY_PATH = pathlib.Path.home() / ".aistory" / "history.json"
 
-# Win32 WM_NCLBUTTONDOWN：标题栏拖拽使用，缩放由 WM_NCHITTEST 自动处理
+# Win32 WM_NCLBUTTONDOWN：标题栏拖拽使用
 _WM_NCLBUTTONDOWN = 0x00A1
-
-_EDGE_TO_HT = {
-    1: 10,   # HTLEFT
-    2: 11,   # HTRIGHT
-    4: 12,   # HTTOP
-    8: 15,   # HTBOTTOM
-    5: 13,   # HTTOPLEFT
-    6: 14,   # HTTOPRIGHT
-    9: 16,   # HTBOTTOMLEFT
-    10: 17,  # HTBOTTOMRIGHT
-}
 
 #260523 Red 小米 MiMo TTS 声线列表（v2.5，限时免费）
 _MIMO_TTS_VOICES = [
@@ -575,6 +564,99 @@ class Bridge(QObject):
             cfg.save_config(self._config)
 
 
+# ── 边缘缩放覆盖层（纯 Qt，不依赖 Windows API） ──────────────
+
+class _EdgeOverlay(QWidget):
+    _MARGIN = 8
+    _MIN_W  = 800
+    _MIN_H  = 560
+    _CURSORS = {
+        'tl': Qt.SizeFDiagCursor, 'tr': Qt.SizeBDiagCursor,
+        'bl': Qt.SizeBDiagCursor, 'br': Qt.SizeFDiagCursor,
+        'l':  Qt.SizeHorCursor,   'r':  Qt.SizeHorCursor,
+        't':  Qt.SizeVerCursor,   'b':  Qt.SizeVerCursor,
+    }
+
+    def __init__(self, parent, window):
+        super().__init__(parent)
+        self._window    = window
+        self._resizing  = False
+        self._edge      = None
+        self._start_pos = None
+        self._start_geo = None
+        self.setMouseTracking(True)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+
+    def _update_mask(self):
+        w, h = self.width(), self.height()
+        m     = self._MARGIN
+        full  = QRegion(0, 0, w, h)
+        inner = QRegion(m, m, w - 2 * m, h - 2 * m)
+        self.setMask(full.subtracted(inner))
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._update_mask()
+
+    def _edge_at(self, pos):
+        w, h = self.width(), self.height()
+        m = self._MARGIN
+        x, y = int(pos.x()), int(pos.y())
+        on_l = x <= m; on_r = x >= w - m - 1
+        on_t = y <= m; on_b = y >= h - m - 1
+        if on_t and on_l: return 'tl'
+        if on_t and on_r: return 'tr'
+        if on_b and on_l: return 'bl'
+        if on_b and on_r: return 'br'
+        if on_l: return 'l'
+        if on_r: return 'r'
+        if on_t: return 't'
+        if on_b: return 'b'
+        return None
+
+    def mouseMoveEvent(self, e):
+        if self._resizing and self._edge:
+            dx = e.globalPosition().x() - self._start_pos.x()
+            dy = e.globalPosition().y() - self._start_pos.y()
+            rx, ry, rw, rh = self._start_geo
+            edge = self._edge
+            if 'l' in edge: rx += dx; rw -= dx
+            if 'r' in edge: rw += dx
+            if 't' in edge: ry += dy; rh -= dy
+            if 'b' in edge: rh += dy
+            if rw < self._MIN_W:
+                if 'l' in edge: rx -= (self._MIN_W - rw)
+                rw = self._MIN_W
+            if rh < self._MIN_H:
+                if 't' in edge: ry -= (self._MIN_H - rh)
+                rh = self._MIN_H
+            self._window.setGeometry(int(rx), int(ry), int(rw), int(rh))
+            return
+        edge = self._edge_at(e.position())
+        self.setCursor(self._CURSORS.get(edge, Qt.ArrowCursor))
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.LeftButton:
+            edge = self._edge_at(e.position())
+            if edge:
+                self._resizing  = True
+                self._edge      = edge
+                self._start_pos = e.globalPosition().toPoint()
+                self._start_geo = (self._window.x(), self._window.y(),
+                                   self._window.width(), self._window.height())
+                return
+        super().mousePressEvent(e)
+
+    def mouseReleaseEvent(self, e):
+        if self._resizing:
+            self._resizing  = False
+            self._edge      = None
+            self._start_pos = None
+            self._start_geo = None
+            return
+        super().mouseReleaseEvent(e)
+
+
 # ─── 主窗口类 ──────────────────────────────────────────────────────────────────
 
 class MainWindow(QWebEngineView):
@@ -602,35 +684,18 @@ class MainWindow(QWebEngineView):
             self.showNormal()
         else:
             self.showMaximized()
+        if hasattr(self, '_edge_overlay'):
+            self._edge_overlay.setGeometry(self.rect())
+            self._edge_overlay.raise_()
 
-    def nativeEvent(self, eventType, message):
-        #260522 Red WM_NCHITTEST：原生处理四边/顶角缩放 + 标题栏拖拽，b=12
-        if eventType == b"windows_generic_MSG":
-            msg = ctypes.wintypes.MSG.from_address(int(message))
-            if msg.message == 0x0084:  # WM_NCHITTEST
-                pt = QCursor.pos()  # 逻辑像素，与 frameGeometry 一致
-                geo = self.frameGeometry()
-                x = pt.x() - geo.x()
-                y = pt.y() - geo.y()
-                w = geo.width()
-                h = geo.height()
-                b = 12  # 缩放边框像素，与 JS RESIZE_MARGIN 统一
-                left   = x < b
-                right  = x > w - b
-                top    = y < b
-                bottom = y > h - b
-                if top    and left:  return True, 13  # HTTOPLEFT
-                if top    and right: return True, 14  # HTTOPRIGHT
-                if bottom and left:  return True, 16  # HTBOTTOMLEFT
-                if bottom and right: return True, 17  # HTBOTTOMRIGHT
-                if top:    return True, 12  # HTTOP
-                if bottom: return True, 15  # HTBOTTOM
-                if left:   return True, 10  # HTLEFT
-                if right:  return True, 11  # HTRIGHT
-                # 标题栏拖移（x<108 为交通灯+折叠键区域，交给 JS 处理点击）
-                if y < 48 and x >= 108:
-                    return True, 2  # HTCAPTION
-        return super().nativeEvent(eventType, message)
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if hasattr(self, '_edge_overlay'):
+            self._edge_overlay.setGeometry(self.rect())
+            self._edge_overlay.raise_()
+
+
+
 
     def closeEvent(self, event):
         super().closeEvent(event)
@@ -645,16 +710,7 @@ class MainWindow(QWebEngineView):
         ctypes.windll.user32.PostMessageW(hwnd, _WM_NCLBUTTONDOWN, 2, lparam)  # HTCAPTION=2
 
     def _start_system_resize(self, edge: int):
-        # 使用 Win32 WM_NCLBUTTONDOWN 直接触发边缘缩放
-        ht = _EDGE_TO_HT.get(edge)
-        if not ht:
-            return
-        hwnd  = int(self.winId())
-        pt    = ctypes.wintypes.POINT()
-        ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
-        lparam = ctypes.c_int32((pt.y << 16) | (pt.x & 0xFFFF)).value
-        ctypes.windll.user32.ReleaseCapture()
-        ctypes.windll.user32.PostMessageW(hwnd, _WM_NCLBUTTONDOWN, ht, lparam)
+        pass
 
 
 # ─── 入口 ──────────────────────────────────────────────────────────────────────
@@ -705,7 +761,12 @@ def main():
             (screen.height() - window.height()) // 2,
         )
 
-    # 260521 Red 退出时保存窗口几何
+    #260525 Red 边缘缩放覆盖层（纯 Qt）
+    window._edge_overlay = _EdgeOverlay(window, window)
+    window._edge_overlay.setGeometry(window.rect())
+    window._edge_overlay.show()
+    window._edge_overlay.raise_()
+
     app.aboutToQuit.connect(bridge.saveWindowGeometry)
 
     window.show()

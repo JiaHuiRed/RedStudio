@@ -1766,6 +1766,9 @@ function setupTitlebarDrag() {
   });
 }
 
+// ─── 缩放边缘检测（由 Python _EdgeOverlay 处理，JS 不参与） ──
+function setupResizeHandles() {}
+
 // 260522 Red 侧边栏折叠切换
 function toggleSidebar() {
   state.sidebarCollapsed = !state.sidebarCollapsed;
@@ -2894,6 +2897,8 @@ function setupEventListeners() {
     $("prompt-content-input").value = "";
   });
   $("prompt-form-save").addEventListener("click", saveNewPrompt);
+
+  setupResizeHandles();
 }
 
 // ─── 启动 ────────────────────────────────────────────────────────────────────
