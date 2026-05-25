@@ -339,8 +339,21 @@ const state = {
   // 260515 Red Token 统计：当前对话累计消耗
   sessionTokens: { prompt: 0, completion: 0 },
   // 260515 Red 提示词库：[{ title, content }]
-  prompts: []
+  prompts: [],
+  //260525 Red 快速预设：当前激活的预设 id
+  activePreset: null,
+  //260525 Red 记忆压缩：是否正在执行压缩摘要调用
+  summarizing: false,
+  summaryKeepFrom: 0
 };
+
+//260525 Red 快速预设定义（2×2 网格，novel/rpg 各两个）
+const PRESETS = [
+  { id: "romance", name: "言情小说", mode: "novel", sysPrompt: "" },
+  { id: "fantasy", name: "奇幻RPG",  mode: "rpg",   sysPrompt: "" },
+  { id: "campus",  name: "校园日常", mode: "novel", sysPrompt: "现代校园背景，注重日常细节与情感描写。" },
+  { id: "wuxia",   name: "武侠RPG",  mode: "rpg",   sysPrompt: "中国武侠江湖世界，主角习武闯荡。" },
+];
 
 // ─── DOM 引用 ───────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -402,6 +415,7 @@ async function init() {
   updateNovelFavBar();
   updateRpgStatusBar();
   updateNovelHeroineTag();
+  renderPresets();
 }
 
 // ─── 配置 ───────────────────────────────────────────────────────────────────
@@ -581,7 +595,9 @@ function streamReply(model) {
     ? [{ role: "system", content: sysPrompt }, ...state.messages]
     : [...state.messages];
   //260523 Red 注入作者注记：插在距末尾 depth 条位置，AI 对靠近当前输入的内容注意力更高
-  const apiMessages = injectAuthorNote(baseMessages);
+  let apiMessages = injectAuthorNote(baseMessages);
+  //260525 Red 小说模式：每轮注入状态提醒（好感度+阶段+行为边界），紧邻当前输入之前
+  if (state.mode === "novel") apiMessages = injectNovelTurnReminder(apiMessages);
 
   bridge.sendChat(JSON.stringify({
     provider:          state.provider,
@@ -630,16 +646,20 @@ function onChatDone() {
   if (!sc) return;
   state.streamCtx = null;
 
-  const { bubble, content, avatarEl, ctx } = sc;
+  if (sc.renderTimer) { clearTimeout(sc.renderTimer); sc.renderTimer = null; }
+  $("stream-badge")?.classList.remove("active");
 
-  // 260521 Red 取消节流定时器（任务1：停止后仍确保 Markdown 最终渲染）
-  if (sc.renderTimer) {
-    clearTimeout(sc.renderTimer);
-    sc.renderTimer = null;
+  //260525 Red 记忆压缩模式：摘要生成完成，直接应用摘要，不渲染气泡
+  if (state.summarizing) {
+    state.summarizing = false;
+    state.isStreaming  = false;
+    sendBtn.disabled   = false;
+    stopBtn.classList.remove("visible");
+    if (sc.ctx.fullContent) applySummary(sc.ctx.fullContent);
+    return;
   }
 
-  // 260521 Red 隐藏鲸鱼生成动画
-  $("stream-badge")?.classList.remove("active");
+  const { bubble, content, avatarEl, ctx } = sc;
 
   bubble.classList.remove("streaming");
 
@@ -701,6 +721,27 @@ function onChatDone() {
   //#260522 Red 小说模式：解析章回内容，渲染章回分隔线 + 选项按钮
   if (state.mode === "novel" && ctx.fullContent) {
     renderNovelChapter(content, bubble, ctx.fullContent);
+    //260525 Red 格式校验：[CHOICES] 缺失时显示内联警告
+    if (!/\[CHOICES\]/i.test(ctx.fullContent)) {
+      const warn = document.createElement("div");
+      warn.className = "novel-format-warn";
+      warn.textContent = "本轮未生成选项，可自由输入继续剧情，或点击重新生成";
+      const retryBtn = document.createElement("button");
+      retryBtn.className = "novel-format-retry";
+      retryBtn.textContent = "重新生成";
+      retryBtn.onclick = () => {
+        // 移除最后一条 AI 消息，重新发送上一条用户输入
+        if (state.messages.length >= 2) {
+          const lastUser = state.messages[state.messages.length - 2];
+          state.messages.splice(state.messages.length - 1, 1);
+          userInputEl.value = lastUser.content;
+          autoResizeTextarea(userInputEl);
+          sendMessage();
+        }
+      };
+      warn.appendChild(retryBtn);
+      content.appendChild(warn);
+    }
   }
 
   //260523 Red RPG 模式：解析 [STATUS] 和 [CHOICES]，更新状态栏
@@ -998,12 +1039,94 @@ function appendMessage(role, content, msgIndex = -1) {
   return { row, bubble };
 }
 
+//260525 Red 通用 toast 提示（短暂显示后自动消失）
+function showToast(msg) {
+  const el = document.createElement("div");
+  el.className = "novel-stage-toast";
+  el.textContent = msg;
+  document.body.appendChild(el);
+  requestAnimationFrame(() => { el.style.opacity = "1"; el.style.transform = "translateY(0)"; });
+  setTimeout(() => {
+    el.style.opacity = "0";
+    setTimeout(() => el.remove(), 400);
+  }, 2200);
+}
+
 function showError(msg) {
   const el = document.createElement("div");
   el.className = "msg-error";
   el.textContent = "⚠ " + msg;
   messagesEl.appendChild(el);
   scrollToBottom();
+}
+
+//260525 Red 记忆压缩：将旧消息发给 AI 生成摘要，替换 state.messages 前段
+function summarizeHistory() {
+  if (state.isStreaming) { showToast("请等待当前生成完成"); return; }
+  const total = state.messages.length;
+  if (total < 8) { showToast("对话太短，无需压缩（至少需要 8 条）"); return; }
+
+  const keepCount = 4;
+  const toCompress = state.messages.slice(0, total - keepCount);
+  const historyText = toCompress.map(m =>
+    (m.role === "user" ? "用户" : "AI") + "：" + m.content
+  ).join("\n\n");
+
+  state.summarizing    = true;
+  state.summaryKeepFrom = total - keepCount;
+  state.isStreaming    = true;
+  sendBtn.disabled     = true;
+  stopBtn.classList.add("visible");
+  $("stream-badge")?.classList.add("active");
+  showToast("正在压缩记忆…");
+
+  // 构造一个哑 streamCtx，让 onChatChunk/onChatDone 正常工作
+  const dummyBubble  = document.createElement("div");
+  const dummyContent = document.createElement("div");
+  state.streamCtx = {
+    bubble: dummyBubble, content: dummyContent, avatarEl: null,
+    ctx: { thinkContent: "", inThinkTag: false, thinkBuffer: "", fullContent: "" },
+    usageData: null, renderTimer: null
+  };
+
+  const model = state.model || $("model-select").value;
+  bridge.sendChat(JSON.stringify({
+    provider: state.provider,
+    model,
+    messages: [
+      { role: "system", content: "你是摘要助手。请将以下对话历史压缩为400字以内的摘要，保留关键情节、人物关系和重要信息。直接输出摘要，不加任何前缀。" },
+      { role: "user",   content: historyText }
+    ],
+    temperature: 0.3,
+    max_tokens:  600,
+    top_p:       1.0,
+    frequency_penalty: 0.0,
+    presence_penalty:  0.0,
+    thinking: false
+  }));
+}
+
+//260525 Red 摘要生成完成后，替换旧消息并在 UI 中插入分割标记
+function applySummary(summary) {
+  const kept = state.messages.slice(state.summaryKeepFrom);
+  state.messages = [
+    { role: "user",      content: "[对话历史摘要]\n" + summary },
+    { role: "assistant", content: "好的，我已了解之前的故事背景。" },
+    ...kept
+  ];
+  saveChatHistory();
+
+  // 在 UI 聊天区插入可见分割线，位置为保留消息之前
+  const allRows = messagesEl.querySelectorAll(".msg-row");
+  const marker = document.createElement("div");
+  marker.className = "memory-compressed-marker";
+  marker.innerHTML = `<span>记忆已压缩（保留近 ${Math.floor(kept.length / 2)} 轮）</span>`;
+  if (allRows.length >= kept.length && allRows.length > 0) {
+    allRows[allRows.length - kept.length].before(marker);
+  } else {
+    messagesEl.prepend(marker);
+  }
+  showToast("记忆压缩完成，已保留最近 " + Math.floor(kept.length / 2) + " 轮对话");
 }
 
 function scrollToBottom() {
@@ -1699,6 +1822,38 @@ function injectAuthorNote(messages) {
   return msgs;
 }
 
+//260525 Red 小说模式每轮状态提醒：好感度+阶段+行为边界+格式要求，插在最后一条消息之前
+//紧邻当前输入，AI 注意力最高，防止规则遗忘
+function buildNovelTurnReminder() {
+  const fav    = state.novelFav;
+  const stage  = state.novelStage;
+  const stages = state.novelStages;
+  const idx    = stages.findIndex(s => s.name === stage);
+  const STAGE_BEHAVIORS = [
+    "保持礼貌距离，禁止任何肢体接触、暧昧动作和亲密话语",
+    "可有日常接触（握手、碰肩），限于普通朋友范畴，禁止暧昧",
+    "友好亲近，可自然接触，禁止任何暧昧行为和亲密描写",
+    "可有明显暧昧互动（牵手、对视），禁止成人向描写",
+    "可有亲密表达，视剧情自然推进，禁止无铺垫的成人向内容"
+  ];
+  const behavior = STAGE_BEHAVIORS[Math.min(Math.max(idx, 0), STAGE_BEHAVIORS.length - 1)];
+  const wc = state.novelWordCount || 200;
+  return `【本轮规则核验 — 必须遵守】
+好感度：${fav}/100 · 当前阶段：${stage}
+当前阶段行为规则：${behavior}
+输出要求：①首行【标题】②地点/时间行③正文约${wc}字④末尾完整 [CHOICES]…[/CHOICES] 四选项
+禁止：超越当前阶段的亲密行为、成人向描写、省略选项块。`;
+}
+
+function injectNovelTurnReminder(messages) {
+  const reminder = buildNovelTurnReminder();
+  const msgs = [...messages];
+  // 插在最后一条消息（当前用户输入）之前，紧邻上下文末尾
+  const insertPos = Math.max(0, msgs.length - 1);
+  msgs.splice(insertPos, 0, { role: "system", content: reminder });
+  return msgs;
+}
+
 //260523 Red 好感度阶段映射（按 cap 阈值查找，支持完全自定义）
 function novelFavStage(fav) {
   for (const s of state.novelStages) {
@@ -1780,6 +1935,25 @@ function buildNovelSystemPrompt() {
                   : state.novelPov === "third" ? "第三人称（他/林然）"
                   : "第二人称（你/林然）";
 
+  //260525 Red 阶段行为边界：按阶段索引映射，超越当前阶段的行为严格禁止
+  const stages     = state.novelStages;
+  const stageIdx   = stages.findIndex(s => s.name === stage);
+  const STAGE_BEHAVIORS = [
+    "保持礼貌距离，禁止任何肢体接触、暧昧动作和亲密话语",
+    "可有日常接触（握手、碰肩），限于普通朋友范畴，禁止暧昧",
+    "友好亲近，可自然接触，禁止任何暧昧行为和亲密描写",
+    "可有明显暧昧互动（牵手、对视），禁止成人向描写",
+    "可有亲密表达，视剧情自然推进，禁止无铺垫的成人向内容"
+  ];
+  const behaviorRule = STAGE_BEHAVIORS[Math.min(Math.max(stageIdx, 0), STAGE_BEHAVIORS.length - 1)];
+  const stageTableLines = stages.map((s, i) => {
+    const lo = i === 0 ? 0 : stages[i - 1].cap + 1;
+    const hi = s.cap;
+    const behavior = STAGE_BEHAVIORS[Math.min(i, STAGE_BEHAVIORS.length - 1)];
+    const mark = s.name === stage ? " ◀ 当前" : "";
+    return `${lo}-${hi} 【${s.name}】：${behavior}${mark}`;
+  }).join("\n");
+
   const formatBlock = `【输出格式（每次严格遵守，不得省略）】
 第一行：【本段标题】
 第二行：📍地点 · 🕐时间 · 天气
@@ -1795,10 +1969,11 @@ D|+N|选项文本
 
 若玩家自由输入而非选项，回复末尾追加：[FAV:+N]（N为-2到+5的整数）
 
-【好感度状态】
+【好感度与行为边界（严格遵守，不得超越当前阶段）】
 当前：${fav}/100 · 阶段：${stage}
-0-20 陌生人 · 21-45 相识 · 46-70 朋友 · 71-90 暧昧 · 91-100 恋人
-每个选项的好感变化限定在 -2 到 +5 之间，根据当前阶段调整女主角的称呼与亲密程度。`;
+${stageTableLines}
+每个选项的好感变化限定在 -2 到 +5 之间。
+当前阶段规则：${behaviorRule}。禁止出现超越此阶段的亲密行为、成人向描写或人物情感跨越。`;
 
   //260523 Red 用户在系统提示词栏手动输入的内容（骨架/额外设定）一并附加
   const manualExtra = state.currentSystemPrompt.trim();
@@ -2253,6 +2428,33 @@ function deleteStoryCharCard() {
 // ─── 角色库 ──────────────────────────────────────────────────────────────────
 let _charlibTab = "novel"; // "novel" | "story"
 
+//260525 Red 渲染快速预设按钮到 #preset-grid
+function renderPresets() {
+  const grid = $("preset-grid");
+  if (!grid) return;
+  grid.innerHTML = "";
+  PRESETS.forEach(preset => {
+    const btn = document.createElement("button");
+    btn.className = "preset-btn" + (state.activePreset === preset.id ? " active" : "");
+    btn.textContent = preset.name;
+    btn.title = preset.mode === "novel" ? "小说模式" : "RPG 模式";
+    btn.addEventListener("click", () => applyPreset(preset));
+    grid.appendChild(btn);
+  });
+}
+
+//260525 Red 应用预设：切换模式、注入场景提示词
+function applyPreset(preset) {
+  switchMode(preset.mode);
+  if (preset.sysPrompt) {
+    const inp = $("sys-prompt-input");
+    if (inp) { inp.value = preset.sysPrompt; autoResizeTextarea(inp); }
+    state.currentSystemPrompt = preset.sysPrompt;
+  }
+  state.activePreset = preset.id;
+  renderPresets();
+}
+
 function openCharLib() {
   renderCharLib();
   $("charlib-overlay").classList.add("open");
@@ -2339,6 +2541,7 @@ function setupEventListeners() {
   $("btn-maximize").addEventListener("click", () => bridge.toggleMaximize());
   $("sidebar-toggle").addEventListener("click", toggleSidebar);
 
+  $("compress-memory-btn").addEventListener("click", summarizeHistory);
   $("charlib-btn").addEventListener("click", openCharLib);
   $("charlib-close").addEventListener("click", () => $("charlib-overlay").classList.remove("open"));
   $("charlib-overlay").addEventListener("click", e => {

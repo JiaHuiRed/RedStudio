@@ -93,6 +93,12 @@
       新建对话
     </button>
 
+    <!-- 260525 Red 快速预设：一键切换模式+场景 -->
+    <div id="preset-section">
+      <div class="section-label"><span>快速预设</span></div>
+      <div id="preset-grid"></div>
+    </div>
+
     <!-- 260523 Red RPG 模式：开局创建按钮（仅 RPG 模式可见） -->
     <div id="story-char-section">
       <div class="section-label"><span>角色 / 世界</span></div>
@@ -126,6 +132,8 @@
         <span id="stats-inline-date"></span>
       </div>
       <div id="stats-inline-body"></div>
+      <!-- 260525 Red 记忆压缩：将旧消息 AI 摘要后替换，释放上下文空间 -->
+      <button id="compress-memory-btn" title="将历史对话压缩为摘要，释放上下文空间">压缩记忆</button>
     </div>
 
     <!-- 底部工具 -->

@@ -3,7 +3,7 @@
 > **轻量本地 AI 对话桌面客户端，支持 Ollama 本地模型与任意 OpenAI 兼容云端 API。**
 > 作者：Red · 基于 PySide6 + QWebChannel 构建，无 Flask 无 HTTP 层。
 
-[![版本](https://img.shields.io/badge/版本-v3.3.4-blue)](CHANGELOG.md)
+[![版本](https://img.shields.io/badge/版本-v3.3.5-blue)](CHANGELOG.md)
 [![平台](https://img.shields.io/badge/平台-Windows%2010%2F11-0078d4)](https://github.com/JiaHuiRed/RedStudio)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab)](https://python.org)
 [![PySide6](https://img.shields.io/badge/PySide6-6.x-41cd52)](https://doc.qt.io/qtforpython)
@@ -44,7 +44,10 @@
 - **女主角角色卡**：姓名、身材、外貌、性格、语言风格、爱好、出身、**开场白**（自动作为首条 AI 回复）
 - **好感度系统**：0–100 进度条 + 阶段标签（5 段全部自定义），选项按钮附带 `+N/-N` 变化徽章
 - **章回选项**：`[CHOICES]` 块渲染为带好感度徽章的可点击按钮，自由输入时 `[FAV:N]` 自动更新
+- **规则强化**：每轮自动注入当前好感度、阶段、行为边界提醒，防止 AI 多轮后遗忘格式；选项缺失时内联警告 + 一键重新生成
 - **作者注记**：可折叠，插入 context 末尾靠后位置，静默修正 AI 行为
+- **记忆压缩**：对话轮次过多时，一键将旧消息摘要压缩，释放上下文空间
+- **快速预设**：侧边栏预设按钮，一键切换模式与场景（言情 / 奇幻RPG / 校园 / 武侠）
 - **新故事设定**：主角名称、故事方向、叙事视角（一/二/三人称）、字数、好感起始值
 
 ## 📊 Token 统计

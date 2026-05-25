@@ -417,6 +417,42 @@ body {
 #new-chat-btn:hover  { background: var(--accent-hover); }
 #new-chat-btn:active { transform: scale(0.97); }
 
+/* 260525 Red 快速预设区 */
+#preset-section {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--sidebar-border);
+}
+#preset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin-top: 6px;
+}
+.preset-btn {
+  background: var(--hover-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-family: var(--font);
+  padding: 6px 4px;
+  cursor: pointer;
+  text-align: center;
+  line-height: 1.35;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.preset-btn:hover {
+  background: var(--active-bg);
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+.preset-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
 /* 历史搜索框 */
 #history-search-wrap {
   display: flex;
@@ -565,6 +601,44 @@ body {
   font-weight: 500;
   font-size: 10.5px;
   font-variant-numeric: tabular-nums;
+}
+
+/* 260525 Red 记忆压缩按钮（在今日 Token 面板内） */
+#compress-memory-btn {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 5px 0;
+  background: none;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+#compress-memory-btn:hover {
+  background: rgba(255, 59, 48, 0.07);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* 260525 Red 记忆压缩分割线标记 */
+.memory-compressed-marker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 16px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+.memory-compressed-marker::before,
+.memory-compressed-marker::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--sidebar-border);
 }
 
 /* 设置面板中的供应商列表 */
@@ -1815,6 +1889,33 @@ body[data-mode="novel"] #novel-heroine-section { display: block; }
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+/* 260525 Red 小说模式格式校验警告 */
+.novel-format-warn {
+  margin: 6px 0 2px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 59, 48, 0.07);
+  border: 1px solid rgba(255, 59, 48, 0.20);
+  color: var(--text-secondary);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.novel-format-retry {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--danger);
+  background: none;
+  color: var(--danger);
+  font-size: 11px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.novel-format-retry:hover { background: rgba(255, 59, 48, 0.10); }
+
 #novel-fav-track {
   flex: 1;
   max-width: 120px;
