@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Red Studio Icon 概念预览 v2</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+    background: #f2f2f7;
+    color: #1c1c1e;
+    padding: 40px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  h1 { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
+  .sub { font-size: 14px; color: #6e6e73; margin-bottom: 40px; }
+  .grid {
+    display: flex;
+    gap: 40px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .card {
+    background: #fff;
+    border-radius: 20px;
+    padding: 32px 28px 24px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    width: 280px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .card h2 { font-size: 16px; font-weight: 600; margin: 16px 0 6px; }
+  .card p { font-size: 13px; color: #6e6e73; line-height: 1.55; }
+  .icon-wrap {
+    width: 160px;
+    height: 160px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .icon-wrap svg { width: 100%; height: 100%; }
+  .sizes { display: flex; gap: 20px; margin-top: 16px; align-items: flex-end; }
+  .sizes .icon-sm { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .sizes span { font-size: 11px; color: #aeaeb2; }
+  .badge {
+    margin-top: 14px;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 10px;
+    background: #f2f2f7;
+    color: #6e6e73;
+    font-weight: 500;
+  }
+</style>
+</head>
+<body>
+
+<h1>🎨 Red Studio Icon 概念设计 v2</h1>
+<p class="sub">干净几何 + 高对比 + 缩小可读</p>
+
+<div class="grid">
+
+  <!-- 方案 A：折纸鹤 -->
+  <div class="card">
+    <div class="icon-wrap">
+      <svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="bgA" x1="0" y1="0" x2="256" y2="256">
+            <stop offset="0%" stop-color="#fff5f5"/>
+            <stop offset="100%" stop-color="#ffe8e8"/>
+          </linearGradient>
+          <linearGradient id="craneA" x1="0" y1="40" x2="200" y2="200">
+            <stop offset="0%" stop-color="#ff453a"/>
+            <stop offset="100%" stop-color="#d63031"/>
+          </linearGradient>
+          <linearGradient id="craneDarkA" x1="0" y1="0" x2="100" y2="100">
+            <stop offset="0%" stop-color="#c92929"/>
+            <stop offset="100%" stop-color="#a81d1d"/>
+          </linearGradient>
+        </defs>
+        <!-- 圆角背景 -->
+        <rect width="256" height="256" rx="54" fill="url(#bgA)"/>
+        <!-- 折纸鹤：由简洁三角面组成 -->
+        <!-- 身体（中心三角） -->
+        <polygon points="128,68 96,148 160,148" fill="url(#craneA)"/>
+        <!-- 左翅（从身体向左展开） -->
+        <polygon points="96,148 40,116 128,68" fill="url(#craneDarkA)"/>
+        <!-- 右翅（从身体向右展开） -->
+        <polygon points="160,148 216,116 128,68" fill="#ff6b5e"/>
+        <!-- 头颈（从身体向上延伸） -->
+        <polygon points="128,68 118,48 138,48" fill="#ff453a"/>
+        <!-- 尾部（从身体向下延伸） -->
+        <polygon points="128,68 110,168 146,168" fill="url(#craneDarkA)" opacity="0.6"/>
+        <!-- 折痕线 -->
+        <line x1="128" y1="68" x2="96" y2="148" stroke="#fff" stroke-width="1.5" opacity="0.25"/>
+        <line x1="128" y1="68" x2="160" y2="148" stroke="#fff" stroke-width="1.5" opacity="0.25"/>
+        <!-- 对话气泡（右上角小圆点） -->
+        <circle cx="186" cy="74" r="18" fill="#ff453a" opacity="0.12"/>
+        <circle cx="186" cy="74" r="14" fill="#ff453a" opacity="0.2"/>
+        <circle cx="182" cy="72" r="3" fill="#ff453a" opacity="0.5"/>
+        <circle cx="190" cy="72" r="3" fill="#ff453a" opacity="0.5"/>
+      </svg>
+    </div>
+    <h2>方案 A · 折纸鹤</h2>
+    <p>简洁三角面拼合的折纸鹤，红色渐变。右上角两个圆点暗示对话气泡。折纸 = 叙事创作，对话 = AI 交互。</p>
+    <span class="badge">🦩 推荐 · 简洁有力</span>
+    <div class="sizes">
+      <div class="icon-sm">
+        <svg viewBox="0 0 256 256" width="48" height="48" xmlns="http://www.w3.org/2000/svg"><rect width="256" height="256" rx="54" fill="url(#bgA)"/><polygon points="128,68 96,148 160,148" fill="url(#craneA)"/><polygon points="96,148 40,116 128,68" fill="url(#craneDarkA)"/><polygon points="160,148 216,116 128,68" fill="#ff6b5e"/><polygon points="128,68 118,48 138,48" fill="#ff453a"/></svg>
+        <span>48px</span>
+      </div>
+      <div class="icon-sm">
+        <svg viewBox="0 0 256 256" width="32" height="32" xmlns="http://www.w3.org/2000/svg"><rect width="256" height="256" rx="54" fill="url(#bgA)"/><polygon points="128,68 96,148 160,148" fill="url(#craneA)"/><polygon points="96,148 40,116 128,68" fill="url(#craneDarkA)"/><polygon points="160,148 216,116 128,68" fill="#ff6b5e"/><polygon points="128,68 118,48 138,48" fill="#ff453a"/></svg>
+        <span>32px</span>
+      </div>
+      <div class="icon-sm">
+        <svg viewBox="0 0 256 256" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect width="256" height="256" rx="54" fill="url(#bgA)"/><polygon points="128,68 96,148 160,148" fill="url(#craneA)"/><polygon points="96,148 40,116 128,68" fill="url(#craneDarkA)"/><polygon points="160,148 216,116 128,68" fill="#ff6b5e"/></svg>
+        <span>16px</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案 B：墨水笔尖 + R -->
+  <div class="card">
+    <div class="icon-wrap">
+      <svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="bgB" x1="0" y1="0" x2="256" y2="256">
+            <stop offset="0%" stop-color="#fff5f5"/>
+            <stop offset="100%" stop-color="#ffe8e8"/>
+          </linearGradient>
+          <linearGradient id="ruby" x1="128" y1="40" x2="128" y2="216">
+            <stop offset="0%" stop-color="#ff453a"/>
+            <stop offset="100%" stop-color="#b91c1c"/>
+          </linearGradient>
+        </defs>
+        <rect width="256" height="256" rx="54" fill="url(#bgB)"/>
+        <!-- 红色圆角矩形填充（类似 iOS app icon 背景） -->
+        <rect x="48" y="48" width="160" height="160" rx="36" fill="url(#ruby)"/>
+        <!-- 白色 R 字母（Red 首字母） -->
+        <text x="128" y="160" text-anchor="middle" font-family="Georgia, serif" font-size="110" font-weight="700" fill="#fff" letter-spacing="-4">R</text>
+        <!-- 笔尖装饰（R 的竖笔末端化为笔尖） -->
+        <polygon points="148,192 140,210 156,210" fill="#fff" opacity="0.9"/>
+        <!-- 墨水点 -->
+        <circle cx="148" cy="218" r="4" fill="#fff" opacity="0.4"/>
+      </svg>
+    </div>
+    <h2>方案 B · 红色 R + 笔尖</h2>
+    <p>红色圆角底 + 白色衬线体 R，R 的竖笔末端化为笔尖。简洁、可辨识、Red 的直接表达。</p>
+    <span class="badge">💎 极简 · 辨识度极高</span>
+    <div class="sizes">
+      <div class="icon-sm">
+        <svg viewBox="0 0 256 256" width="48" height="48" xmlns="http://www.w3.org/2000/svg"><rect width="256" height="256" rx="54" fill="url(#bgB)"/><rect x="48" y="48" width="160" height="160" rx="36" fill="url(#ruby)"/><text x="128" y="160" text-anchor="middle" font-family="Georgia,serif" font-size="110" font-weight="700" fill="#fff" letter-spacing="-4">R</text></svg>
+        <span>48px</span>
+      </div>
+      <div class="icon-sm">
+        <svg viewBox="0 0 256 256" width="32" height="32" xmlns="http://www.w3.org/2000/svg"><rect width="256" height="256" rx="54" fill="url(#bgB)"/><rect x="48" y="48" width="160" height="160" rx="36" fill="url(#ruby)"/><text x="128" y="160" text-anchor="middle" font-family="Georgia,serif" font-size="110" font-weight="700" fill="#fff" letter-spacing="-4">R</text></svg>
+        <span>32px</span>
+      </div>
+      <div class="icon-sm">
+        <svg viewBox="0 0 256 256" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect width="256" height="256" rx="54" fill="url(#bgB)"/><rect x="48" y="48" width="160" height="160" rx="36" fill="url(#ruby)"/><text x="128" y="158" text-anchor="middle" font-family="Georgia,serif" font-size="110" font-weight="700" fill="#fff" letter-spacing="-4">R</text></svg>
+        <span>16px</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案 C：红猫头 -->
+  <div class="card">
+    <div class="icon-wrap">
+      <svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="bgC" x1="0" y1="0" x2="256" y2="256">
+            <stop offset="0%" stop-color="#fff5f5"/>
+            <stop offset="100%" stop-color="#ffe8e8"/>
+          </linearGradient>
+          <linearGradient id="catRed" x1="128" y1="40" x2="128" y2="200">
+            <stop offset="0%" stop-color="#ff453a"/>
+            <stop offset="100%" stop-color="#d63031"/>
+          </linearGradient>
+        </defs>
+        <rect width="256" height="256" rx="54" fill="url(#bgC)"/>
+        <!-- 猫头主体（圆） -->
+        <circle cx="128" cy="140" r="64" fill="url(#catRed)"/>
+        <!-- 左耳（三角） -->
+        <polygon points="72,100 82,48 102,92" fill="#ff453a"/>
+        <polygon points="78,94 86,58 98,90" fill="#ff6b5e"/>
+        <!-- 右耳（三角） -->
+        <polygon points="184,100 174,48 154,92" fill="#ff453a"/>
+        <polygon points="178,94 170,58 158,90" fill="#ff6b5e"/>
+        <!-- 白色面部区域 -->
+        <ellipse cx="128" cy="152" rx="36" ry="30" fill="#fff" opacity="0.92"/>
+        <!-- 眼睛（AI 蓝色） -->
+        <ellipse cx="112" cy="136" rx="8" ry="9" fill="#5b8cff"/>
+        <ellipse cx="144" cy="136" rx="8" ry="9" fill="#5b8cff"/>
+        <!-- 瞳孔 -->
+        <ellipse cx="114" cy="136" rx="4" ry="5" fill="#1a1a2e"/>
+        <ellipse cx="146" cy="136" rx="4" ry="5" fill="#1a1a2e"/>
+        <!-- 高光 -->
+        <circle cx="110" cy="132" r="3" fill="#fff" opacity="0.8"/>
+        <circle cx="142" cy="132" r="3" fill="#fff" opacity="0.8"/>
+        <!-- 鼻子 -->
+        <ellipse cx="128" cy="150" rx="4" ry="3" fill="#ff6b5e"/>
+        <!-- 嘴 -->
+        <path d="M122 155 Q128 160 134 155" stroke="#1c1c1e" stroke-width="1.5" fill="none" opacity="0.2"/>
+        <!-- 胡须 -->
+        <line x1="78" y1="140" x2="104" y2="144" stroke="#1c1c1e" stroke-width="1" opacity="0.1"/>
+        <line x1="78" y1="150" x2="104" y2="148" stroke="#1c1c1e" stroke-width="1" opacity="0.1"/>
+        <line x1="178" y1="140" x2="152" y2="144" stroke="#1c1c1e" stroke-width="1" opacity="0.1"/>
+        <line x1="178" y1="150" x2="152" y2="148" stroke="#1c1c1e" stroke-width="1" opacity="0.1"/>
+        <!-- AI 光晕 -->
+        <circle cx="128" cy="136" r="50" fill="none" stroke="#5b8cff" stroke-width="2" opacity="0.08"/>
+      </svg>
+    </div>
+    <h2>方案 C · Red 猫</h2>
+    <p>红色猫咪头像 + 蓝色发光眼睛，与 loading 动画 mona 猫呼应。圆润亲切，辨识度高。</p>
+    <span class="badge">🐱 萌系 · 品牌统一</span>
+    <div class="sizes">
+      <div class="icon-sm">
+        <svg viewBox="0 0 256 256" width="48" height="48" xmlns="http://www.w3.org/2000/svg"><rect width="256" height="256" rx="54" fill="url(#bgC)"/><circle cx="128" cy="140" r="64" fill="url(#catRed)"/><polygon points="72,100 82,48 102,92" fill="#ff453a"/><polygon points="184,100 174,48 154,92" fill="#ff453a"/><ellipse cx="128" cy="152" rx="36" ry="30" fill="#fff" opacity="0.92"/><ellipse cx="112" cy="136" rx="8" ry="9" fill="#5b8cff"/><ellipse cx="144" cy="136" rx="8" ry="9" fill="#5b8cff"/></svg>
+        <span>48px</span>
+      </div>
+      <div class="icon-sm">
+        <svg viewBox="0 0 256 256" width="32" height="32" xmlns="http://www.w3.org/2000/svg"><rect width="256" height="256" rx="54" fill="url(#bgC)"/><circle cx="128" cy="140" r="64" fill="url(#catRed)"/><polygon points="72,100 82,48 102,92" fill="#ff453a"/><polygon points="184,100 174,48 154,92" fill="#ff453a"/><ellipse cx="128" cy="152" rx="36" ry="30" fill="#fff" opacity="0.92"/><ellipse cx="112" cy="136" rx="8" ry="9" fill="#5b8cff"/><ellipse cx="144" cy="136" rx="8" ry="9" fill="#5b8cff"/></svg>
+        <span>32px</span>
+      </div>
+      <div class="icon-sm">
+        <svg viewBox="0 0 256 256" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect width="256" height="256" rx="54" fill="url(#bgC)"/><circle cx="128" cy="140" r="64" fill="url(#catRed)"/><polygon points="72,100 82,48 102,92" fill="#ff453a"/><polygon points="184,100 174,48 154,92" fill="#ff453a"/></svg>
+        <span>16px</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

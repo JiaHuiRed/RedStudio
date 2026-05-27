@@ -257,33 +257,6 @@ function charColor(name) {
   return CHAR_COLORS[h % CHAR_COLORS.length];
 }
 
-// 260515 Red 解析 AI 故事回复：提取 [角色名] 前缀 + 末尾选项按钮
-function parseStoryContent(text) {
-  const nameMatch = text.match(/^\[([^\]]{1,24})\]\s*/);
-  const charName  = nameMatch ? nameMatch[1] : null;
-  const body      = nameMatch ? text.slice(nameMatch[0].length) : text;
-
-  // 从末尾向上扫描连续的选项行（A. / B. / 1. / 2. 等格式）
-  const lines    = body.split("\n");
-  const choiceRe = /^([A-Ea-e1-5])[.．、）)]\s+(.{1,100})/;
-  const choices  = [];
-  let splitIdx   = lines.length;
-
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const trimmed = lines[i].trim();
-    if (!trimmed) { if (choices.length > 0) break; continue; }
-    const m = trimmed.match(choiceRe);
-    if (m) { choices.unshift({ key: m[1].toUpperCase(), label: trimmed }); splitIdx = i; }
-    else   { if (choices.length > 0) break; }
-  }
-
-  const mainText = choices.length >= 2
-    ? lines.slice(0, splitIdx).join("\n").trimEnd()
-    : body;
-
-  return { charName, mainText, choices: choices.length >= 2 ? choices : [] };
-}
-
 // ─── 状态 ──────────────────────────────────────────────────────────────────
 const state = {
   provider: "ollama",       // 当前选中的 provider
@@ -323,6 +296,7 @@ const state = {
   authorNoteDepth: 3,   // 插入深度：距末尾消息条数
   //260523 Red 小说模式好感度系统
   novelFav:       0,        // 当前好感度 0-100
+  novelFavEnabled: true,    // 好感度开关
   novelStage:     "陌生人", // 当前阶段
   //260523 Red 完全自定义阶段：[{name, cap}]，cap 为该阶段好感上限，最后一段固定 100
   novelStages: [
@@ -340,20 +314,12 @@ const state = {
   sessionTokens: { prompt: 0, completion: 0 },
   // 260515 Red 提示词库：[{ title, content }]
   prompts: [],
-  //260525 Red 快速预设：当前激活的预设 id
-  activePreset: null,
-  //260525 Red 记忆压缩：是否正在执行压缩摘要调用
+  // 记忆压缩：是否正在执行压缩摘要调用
   summarizing: false,
-  summaryKeepFrom: 0
+  summaryKeepFrom: 0,
+  // 当前选中的模板名
+  activeTemplate: null
 };
-
-//260525 Red 快速预设定义（2×2 网格，novel/rpg 各两个）
-const PRESETS = [
-  { id: "romance", name: "言情小说", mode: "novel", sysPrompt: "" },
-  { id: "fantasy", name: "奇幻RPG",  mode: "rpg",   sysPrompt: "" },
-  { id: "campus",  name: "校园日常", mode: "novel", sysPrompt: "现代校园背景，注重日常细节与情感描写。" },
-  { id: "wuxia",   name: "武侠RPG",  mode: "rpg",   sysPrompt: "中国武侠江湖世界，主角习武闯荡。" },
-];
 
 // ─── DOM 引用 ───────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -404,6 +370,7 @@ async function init() {
   renderHistory();
 
   renderStatsInline();
+  renderTemplateSelect();  // 填充新故事模板列表
 
   // 260522 Red 恢复侧边栏折叠状态
   state.sidebarCollapsed = !!cfg.sidebar_collapsed;
@@ -679,9 +646,9 @@ function onChatDone() {
     bubble.textContent = "（已停止）";
   }
 
-  //#260522 Red 故事模式（角色扮演）：解析角色名、渲染角色头像、添加选项按钮
+  //#260522 Red RPG 模式：提取 [角色名] 前缀，渲染名字标签 + 头像
   if (state.mode === "rpg" && ctx.fullContent) {
-    const { charName, mainText, choices } = parseStoryContent(ctx.fullContent);
+    const charName = extractCharName(ctx.fullContent);
 
     if (charName) {
       if (!state.storyCharacters[charName]) {
@@ -694,27 +661,6 @@ function onChatDone() {
       nameLabel.className = "story-char-name";
       nameLabel.textContent = charName;
       content.insertBefore(nameLabel, content.firstChild);
-    }
-
-    if (mainText !== ctx.fullContent) {
-      renderMarkdownBubble(bubble, mainText);
-    }
-
-    if (choices.length > 0) {
-      const choicesDiv = document.createElement("div");
-      choicesDiv.className = "story-choices";
-      choices.forEach(c => {
-        const btn = document.createElement("button");
-        btn.className = "story-choice-btn";
-        btn.textContent = c.label;
-        btn.onclick = () => {
-          userInputEl.value = c.label;
-          autoResizeTextarea();
-          userInputEl.focus();
-        };
-        choicesDiv.appendChild(btn);
-      });
-      content.appendChild(choicesDiv);
     }
   }
 
@@ -939,7 +885,6 @@ function switchMode(mode, save = true) {
   if (save) postConfig({ last_mode: mode });
 }
 
-//260526 Red 渲染合并模式专属区（RPG / 小说共用 #mode-section）
 function renderModeSection() {
   const body = $("mode-section-body");
   if (!body) return;
@@ -1016,7 +961,8 @@ function appendMessage(role, content, msgIndex = -1) {
 
     //#260522 Red 历史消息重放：故事模式解析角色卡，小说模式解析选项
     if (state.mode === "rpg") {
-      const { charName, mainText, choices } = parseStoryContent(content);
+      const charName = extractCharName(content);
+      const { mainText, choices } = parseContentBlocks(content);
 
       const av = makeAvatar();
       if (charName) {
@@ -1034,12 +980,17 @@ function appendMessage(role, content, msgIndex = -1) {
       contentDiv.appendChild(bubble);
       if (choices.length > 0) {
         const choicesDiv = document.createElement("div");
-        choicesDiv.className = "story-choices";
+        choicesDiv.className = "novel-choices";
         choices.forEach(c => {
           const btn = document.createElement("button");
-          btn.className = "story-choice-btn";
-          btn.textContent = c.label;
-          btn.onclick = () => { userInputEl.value = c.label; autoResizeTextarea(); userInputEl.focus(); };
+          btn.className = "novel-choice-btn";
+          btn.onclick = () => {
+            choicesDiv.querySelectorAll(".novel-choice-btn").forEach(b => b.disabled = true);
+            btn.classList.add("selected");
+            userInputEl.value = c.text;
+            autoResizeTextarea();
+            setTimeout(() => sendMessage(), 300);
+          };
           choicesDiv.appendChild(btn);
         });
         contentDiv.appendChild(choicesDiv);
@@ -1201,7 +1152,7 @@ function injectOpeningMessage(text) {
 
   // 小说模式走 renderNovelChapter，否则直接渲染 markdown
   if (state.mode === "novel") {
-    renderNovelChapter(text, bubble, textEl);
+    renderNovelChapter(content, textEl, text);
   } else {
     textEl.innerHTML = typeof marked !== "undefined" ? marked.parse(text) : text;
   }
@@ -1223,6 +1174,7 @@ function newChat() {
   $("sys-prompt-input").value = "";
   $("sys-prompt-bar").classList.remove("open");
   state.authorNote = "";
+  state.novelFavEnabled = true;
   $("author-note-input").value = "";
   $("author-note-bar").classList.remove("open", "active");
 
@@ -1254,6 +1206,7 @@ function saveChatHistory() {
     existing.novelStages       = state.novelStages.map(s => ({ ...s }));
     existing.novelWordCount    = state.novelWordCount;
     existing.novelPov          = state.novelPov;
+    existing.novelFavEnabled   = state.novelFavEnabled;
     existing.novelHeroName     = state.novelHeroName;
     existing.novelStoryDir     = state.novelStoryDir;
     existing.authorNote        = state.authorNote;
@@ -1281,6 +1234,7 @@ function saveChatHistory() {
       novelStages:       state.novelStages.map(s => ({ ...s })),
       novelWordCount:    state.novelWordCount,
       novelPov:          state.novelPov,
+      novelFavEnabled:   state.novelFavEnabled,
       novelStoryDir:     state.novelStoryDir,
       authorNote:        state.authorNote,
       authorNoteDepth:   state.authorNoteDepth,
@@ -1331,6 +1285,20 @@ function renderHistory() {
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
       </svg>
       <span class="history-title">${escapeHtml(chat.title)}</span>`;
+    const renameBtn = document.createElement("button");
+    renameBtn.className = "history-rename-btn";
+    renameBtn.title = "重命名";
+    renameBtn.textContent = "✎";
+    renameBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      const newTitle = prompt("重命名对话：", chat.title);
+      if (newTitle && newTitle.trim() && newTitle.trim() !== chat.title) {
+        chat.title = newTitle.trim();
+        bridge.saveHistory(JSON.stringify(state.chatHistory.slice(0, 30)));
+        renderHistory();
+      }
+    });
+    item.appendChild(renameBtn);
     const delBtn = document.createElement("button");
     delBtn.className = "history-delete-btn";
     delBtn.title = "删除";
@@ -1365,6 +1333,7 @@ function loadChat(chat) {
         { name:"暧昧",  cap:90, rule:"可有明显暧昧互动（牵手、对视），禁止成人向描写" },
         { name:"恋人",  cap:100, rule:"可有亲密表达，视剧情自然推进，禁止无铺垫的成人向内容" } ];
   state.novelStage          = chat.novelStage        || novelFavStage(state.novelFav);
+  state.novelFavEnabled     = chat.novelFavEnabled   !== false;
   state.novelWordCount      = chat.novelWordCount    || 200;
   state.novelPov            = chat.novelPov          || "second";
   state.novelHeroName       = chat.novelHeroName     || "林然";
@@ -1473,7 +1442,9 @@ function saveSettings() {
       ? state.config.provider_order
       : Object.keys(state.config.providers || {}),
     novel_heroines:        state.config.novel_heroines || {},
-    story_char_cards:      state.config.story_char_cards || {}
+    story_char_cards:      state.config.story_char_cards || {},
+    templates:             state.config.templates || {},
+    default_hero_name:     state.config.default_hero_name || "林然"
   };
 
   // 260521 Red 直接调用桥接槽保存，无需等待响应
@@ -1855,33 +1826,38 @@ function injectAuthorNote(messages) {
   return msgs;
 }
 
-//260525 Red 小说模式每轮状态提醒：好感度+阶段+行为边界+格式要求，插在最后一条消息之前
-//紧邻当前输入，AI 注意力最高，防止规则遗忘
+//260525 Red 小说模式每轮状态提醒：好感度+阶段+行为边界，插在最后一条消息之前
 function buildNovelTurnReminder() {
+  if (!state.novelFavEnabled) return "";  // 好感度关闭时跳过
   const fav    = state.novelFav;
   const stage  = state.novelStage;
   const stages = state.novelStages;
   const idx    = stages.findIndex(s => s.name === stage);
   const cur    = stages[Math.min(Math.max(idx, 0), stages.length - 1)];
   const behavior = cur?.rule || "遵守当前阶段的行为边界";
-  const wc = state.novelWordCount || 200;
-  return `【本轮规则核验 — 必须遵守】
-好感度：${fav}/100 · 当前阶段：${stage}
+  const maxFav = novelFavMax();
+  return `【本轮好感度核验】
+好感度：${fav}/${maxFav} · 当前阶段：${stage}
 当前阶段行为规则：${behavior}
-输出要求：①首行【标题】②地点/时间行③正文约${wc}字④末尾完整 [CHOICES]…[/CHOICES] 四选项
-禁止：超越当前阶段的亲密行为、成人向描写、省略选项块。`;
+禁止超越当前阶段的亲密行为。`;
 }
 
 function injectNovelTurnReminder(messages) {
   const reminder = buildNovelTurnReminder();
+  if (!reminder) return messages;
   const msgs = [...messages];
-  // 插在最后一条消息（当前用户输入）之前，紧邻上下文末尾
   const insertPos = Math.max(0, msgs.length - 1);
   msgs.splice(insertPos, 0, { role: "system", content: reminder });
   return msgs;
 }
 
-//260523 Red 好感度阶段映射（按 cap 阈值查找，支持完全自定义）
+// 好感度最大上限（取最后一段的 cap）
+function novelFavMax() {
+  const stages = state.novelStages;
+  return stages.length > 0 ? stages[stages.length - 1].cap : 100;
+}
+
+//260523 Red 好感度阶段映射（按 cap 阈值查找，支持自定义数量）
 function novelFavStage(fav) {
   for (const s of state.novelStages) {
     if (fav <= s.cap) return s.name;
@@ -1889,11 +1865,42 @@ function novelFavStage(fav) {
   return state.novelStages[state.novelStages.length - 1]?.name || "恋人";
 }
 
+// 渲染好感阶段表格（动态行数）
+function renderNovelStages() {
+  const table = $("ns-stages-table");
+  if (!table) return;
+  table.innerHTML = "";
+  state.novelStages.forEach((s, i) => {
+    const row = document.createElement("div");
+    row.className = "ns-stage-row";
+    const isLast = i === state.novelStages.length - 1;
+    row.innerHTML = `
+      <input class="ns-stage-name" type="text" placeholder="阶段${i+1}名称" value="${s.name}">
+      <input class="ns-stage-cap" type="number" placeholder="上限" min="1" max="999" value="${isLast ? 100 : s.cap}">
+      <input class="ns-stage-rule" type="text" placeholder="行为约束…" value="${s.rule || ""}">
+      ${state.novelStages.length > 2 ? '<button class="ns-stage-del" title="删除此阶段">×</button>' : ""}`;
+    if (state.novelStages.length > 2) {
+      const delBtn = row.querySelector(".ns-stage-del");
+      delBtn.addEventListener("click", () => {
+        state.novelStages.splice(i, 1);
+        // 确保 cap 递增
+        for (let j = 1; j < state.novelStages.length; j++) {
+          if (state.novelStages[j].cap <= state.novelStages[j-1].cap)
+            state.novelStages[j].cap = state.novelStages[j-1].cap + 1;
+        }
+        renderNovelStages();
+      });
+    }
+    table.appendChild(row);
+  });
+}
+
 //260523 Red 应用好感度变化，更新状态栏
 function applyNovelFavDelta(delta) {
   if (delta === 0) return;
   const prevStage = state.novelStage;
-  state.novelFav = Math.max(0, Math.min(100, state.novelFav + delta));
+  const max = novelFavMax();
+  state.novelFav = Math.max(0, Math.min(max, state.novelFav + delta));
   state.novelStage = novelFavStage(state.novelFav);
   updateNovelFavBar();
   showNovelFavFloat(delta);
@@ -1919,8 +1926,10 @@ function updateNovelFavBar() {
   const fill    = $("novel-fav-fill");
   const valEl   = $("novel-fav-value");
   const stageEl = $("novel-stage-text");
-  if (fill)    fill.style.width = `${state.novelFav}%`;
-  if (valEl)   valEl.textContent = state.novelFav;
+  const max     = novelFavMax();
+  const pct     = max > 0 ? (state.novelFav / max * 100) : 0;
+  if (fill)    fill.style.width = `${Math.min(pct, 100)}%`;
+  if (valEl)   valEl.textContent = `${state.novelFav}/${max}`;
   if (stageEl) stageEl.textContent = state.novelStage;
 }
 
@@ -1939,9 +1948,23 @@ function showNovelStageToast(stage) {
 
 function buildNovelSystemPrompt() {
   const cfg      = state.config;
-  const heroName = (state.novelHeroName || "林然").trim();
+  const heroName = (state.novelHeroName || cfg.default_hero_name || "林然").trim();
 
-  //260523 Red 女主角角色卡
+  // 从模板获取内容
+  const templates = cfg.templates || {};
+  const tpl = state.activeTemplate ? templates[state.activeTemplate] : null;
+  let templateContent = "";
+  if (tpl && tpl.content) {
+    templateContent = tpl.content;
+    // 替换占位符
+    templateContent = templateContent
+      .replace(/\{hero_name\}/g, heroName)
+      .replace(/\{story_dir\}/g, (state.novelStoryDir || "").trim() || "无特殊设定")
+      .replace(/\{word_count\}/g, String(state.novelWordCount || 200))
+      .replace(/\{pov\}/g, state.novelPov === "first" ? "第一人称" : "第三人称");
+  }
+
+  // 女主角角色卡（不论有无模板都拼进去）
   const heroines = cfg.novel_heroines || {};
   const heroine  = heroines[state.novelHeroine];
   let heroineCard = "";
@@ -1963,61 +1986,36 @@ function buildNovelSystemPrompt() {
     heroineCard = `【女主角设定 — ${heroine.name || state.novelHeroine}】\n${hLines.join("\n")}`;
   }
 
-  //260523 Red 故事方向 / 主角背景
-  const storyDir = (state.novelStoryDir || "").trim();
-  const storySection = storyDir ? `【故事方向 / 主角背景】\n${storyDir}` : "";
-
-  //260523 Red 好感度状态 + 输出格式指令
-  const fav       = state.novelFav;
-  const stage     = novelFavStage(fav);
-  const wordCount = state.novelWordCount || 200;
-  const pov       = state.novelPov === "first" ? "第一人称（我/林然）"
-                  : state.novelPov === "third" ? "第三人称（他/林然）"
-                  : "第二人称（你/林然）";
-
-  //260525 Red 阶段行为边界：使用自定义阶段规则
-  const stages     = state.novelStages;
-  const stageIdx   = stages.findIndex(s => s.name === stage);
-  const cur        = stages[Math.min(Math.max(stageIdx, 0), stages.length - 1)];
-  const behaviorRule = cur?.rule || "遵守当前阶段的行为边界";
-  const stageTableLines = stages.map((s, i) => {
-    const lo = i === 0 ? 0 : stages[i - 1].cap + 1;
-    const hi = s.cap;
-    const behavior = s.rule || "遵守当前阶段的行为边界";
-    const mark = s.name === stage ? " ◀ 当前" : "";
-    return `${lo}-${hi} 【${s.name}】：${behavior}${mark}`;
-  }).join("\n");
-
-  const formatBlock = `【输出格式（每次严格遵守，不得省略）】
-第一行：【本段标题】
-第二行：📍地点 · 🕐时间 · 天气
-空一行，正文约${wordCount}字，${pov}叙事，自然推进剧情。
-空一行，输出选项块：
-
-[CHOICES]
-A|+N|选项文本
-B|+N|选项文本
-C|+N|选项文本
-D|+N|选项文本
-[/CHOICES]
-
-若玩家自由输入而非选项，回复末尾追加：[FAV:+N]（N为-2到+5的整数）
-
-【好感度与行为边界（严格遵守，不得超越当前阶段）】
-当前：${fav}/100 · 阶段：${stage}
+  // 好感度轮次提醒（仅在开启时注入到当前轮）
+  let favPrompt = "";
+  if (state.novelFavEnabled) {
+    const fav       = state.novelFav;
+    const stage     = novelFavStage(fav);
+    const stages     = state.novelStages;
+    const stageIdx   = stages.findIndex(s => s.name === stage);
+    const cur        = stages[Math.min(Math.max(stageIdx, 0), stages.length - 1)];
+    const behaviorRule = cur?.rule || "遵守当前阶段的行为边界";
+    const stageTableLines = stages.map((s, i) => {
+      const lo = i === 0 ? 0 : stages[i - 1].cap + 1;
+      const hi = s.cap;
+      const behavior = s.rule || "遵守当前阶段的行为边界";
+      const mark = s.name === stage ? " ◀ 当前" : "";
+      return `${lo}-${hi} 【${s.name}】：${behavior}${mark}`;
+    }).join("\n");
+    const maxFav = novelFavMax();
+    favPrompt = `当前好感度：${fav}/${maxFav} · 阶段：${stage}
 ${stageTableLines}
-每个选项的好感变化限定在 -2 到 +5 之间。
-当前阶段规则：${behaviorRule}。禁止出现超越此阶段的亲密行为、成人向描写或人物情感跨越。`;
+当前阶段规则：${behaviorRule}`;
+  }
 
-  //260523 Red 用户在系统提示词栏手动输入的内容（骨架/额外设定）一并附加
+  // 用户在系统提示词栏手动输入的内容
   const manualExtra = state.currentSystemPrompt.trim();
 
-  const autoBase = `你是一部互动小说的写手，负责推进故事，扮演除${heroName}以外的所有角色。`;
-  return [autoBase, storySection, heroineCard, formatBlock, manualExtra].filter(Boolean).join("\n\n");
+  return [templateContent, heroineCard, favPrompt ? `【好感度与行为边界】\n${favPrompt}` : "", manualExtra].filter(Boolean).join("\n\n");
 }
 
-//260523 Red 解析小说 AI 回复：提取正文、[CHOICES] 块（含好感变化）、[FAV:N] 标签
-function parseNovelContent(text) {
+// 解析 AI 回复：提取正文、[CHOICES] 块（含好感变化/类型）、[FAV:N] 标签
+function parseContentBlocks(text) {
   let mainText = text;
   const choices = [];
   let favDelta = 0;
@@ -2030,9 +2028,16 @@ function parseNovelContent(text) {
       const parts = line.trim().split("|");
       if (parts.length >= 3) {
         const label = parts[0].trim();
-        const delta = Math.max(-2, Math.min(5, parseInt(parts[1]) || 0));
+        const second = parts[1].trim();
         const choiceText = parts.slice(2).join("|").trim();
-        if (label && choiceText) choices.push({ label, delta, text: choiceText });
+        if (label && choiceText) {
+          const num = parseInt(second);
+          if (!isNaN(num) && second === String(num)) {
+            choices.push({ label, delta: Math.max(-2, Math.min(5, num)), type: null, text: choiceText });
+          } else {
+            choices.push({ label, delta: 0, type: second, text: choiceText });
+          }
+        }
       }
     }
   }
@@ -2050,7 +2055,7 @@ function parseNovelContent(text) {
     const idx = new Set();
     for (let i = 0; i < lines.length; i++) {
       const m = lines[i].match(/^([1-4])[.、．]\s*(.+)$/);
-      if (m) { choices.push({ label: m[1], delta: 0, text: m[2].trim() }); idx.add(i); }
+      if (m) { choices.push({ label: m[1], delta: 0, type: null, text: m[2].trim() }); idx.add(i); }
     }
     if (choices.length >= 2) {
       mainText = lines.filter((_, i) => !idx.has(i)).join("\n").trimEnd();
@@ -2062,9 +2067,15 @@ function parseNovelContent(text) {
   return { mainText, choices, favDelta };
 }
 
+// 提取 [角色名] 前缀（RPG 模式 NPC 对话用）
+function extractCharName(text) {
+  const m = text.match(/^\[([^\]]{1,24})\]\s*/);
+  return m ? m[1] : null;
+}
+
 //260523 Red 小说章回渲染：正文走 Markdown，选项变按钮（含好感变化徽章）
 function renderNovelChapter(content, bubble, text) {
-  const { mainText, choices, favDelta } = parseNovelContent(text);
+  const { mainText, choices, favDelta } = parseContentBlocks(text);
 
   renderMarkdownBubble(bubble, mainText);
 
@@ -2279,10 +2290,10 @@ function updateRpgStatusBar() {
   if (nameTag) nameTag.textContent = state.rpgChar.name ? `⚔ ${state.rpgChar.name}` : "";
 }
 
-//260523 Red RPG 章节渲染：解析 STATUS + CHOICES，正文走 Markdown
+//260523 Red RPG 章节渲染：解析 STATUS + CHOICES，正文走 Markdown，选项自动发送
 function renderRpgChapter(content, bubble, text) {
   const cleanText = parseRpgStatus(text);
-  const { mainText, choices } = parseNovelContent(cleanText);
+  const { mainText, choices } = parseContentBlocks(cleanText);
   renderMarkdownBubble(bubble, mainText);
   if (choices.length > 0) {
     const choicesDiv = document.createElement("div");
@@ -2296,7 +2307,7 @@ function renderRpgChapter(content, bubble, text) {
         btn.classList.add("selected");
         userInputEl.value = c.text;
         autoResizeTextarea();
-        userInputEl.focus();
+        setTimeout(() => sendMessage(), 300);
       };
       choicesDiv.appendChild(btn);
     });
@@ -2462,34 +2473,171 @@ function deleteStoryCharCard() {
 // ─── 角色库 ──────────────────────────────────────────────────────────────────
 let _charlibTab = "novel"; // "novel" | "story"
 
-//260526 Red 渲染快速预设到 overlay #presets-grid
+// 渲染模板选择器（新故事面板）
+function renderTemplateSelect() {
+  const wrap = $("ns-template-select");
+  if (!wrap) return;
+  const templates = state.config.templates || {};
+  const names = Object.keys(templates);
+  wrap.innerHTML = "";
+  if (names.length === 0) {
+    wrap.innerHTML = '<span style="font-size:12px;color:var(--text-tertiary)">暂无模板，请先在设置中创建</span>';
+    return;
+  }
+  names.forEach(name => {
+    const btn = document.createElement("button");
+    btn.className = "ns-template-btn" + (state.activeTemplate === name ? " active" : "");
+    btn.textContent = name;
+    btn.addEventListener("click", () => {
+      state.activeTemplate = name;
+      document.querySelectorAll(".ns-template-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      // 填充模板默认值
+      const tpl = templates[name];
+      if (tpl) {
+        $("ns-hero-name").value = tpl.default_hero || state.config.default_hero_name || "林然";
+        $("ns-pov").value = tpl.default_pov || "second";
+        $("ns-word-count").value = tpl.default_words || 200;
+        $("ns-fav-enabled").checked = tpl.fav_enabled !== false;
+      }
+    });
+    wrap.appendChild(btn);
+  });
+  // 默认选中第一个
+  if (names.length > 0) {
+    const firstBtn = wrap.querySelector(".ns-template-btn");
+    if (firstBtn && !state.activeTemplate) {
+      state.activeTemplate = names[0];
+      firstBtn.classList.add("active");
+      const tpl = templates[names[0]];
+      if (tpl) {
+        $("ns-hero-name").value = tpl.default_hero || state.config.default_hero_name || "林然";
+        $("ns-pov").value = tpl.default_pov || "second";
+        $("ns-word-count").value = tpl.default_words || 200;
+        $("ns-fav-enabled").checked = tpl.fav_enabled !== false;
+      }
+    }
+  }
+}
+
+// 渲染模板列表（设置面板内）
+function renderTemplateList() {
+  const list = $("s-template-list");
+  if (!list) return;
+  const templates = state.config.templates || {};
+  const names = Object.keys(templates);
+  list.innerHTML = "";
+  if (names.length === 0) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--text-tertiary);padding:4px 0">暂无模板，点击"+ 新建模板"添加</div>';
+    return;
+  }
+  names.forEach(name => {
+    const t = templates[name];
+    const item = document.createElement("div");
+    item.className = "s-template-item";
+    item.innerHTML = `
+      <div class="s-template-item-info">
+        <span class="s-template-item-name">${escapeHtml(t.name || name)}</span>
+        <span class="s-template-item-preview">${escapeHtml((t.content || "").slice(0, 60))}${(t.content||"").length > 60 ? "…" : ""}</span>
+      </div>
+      <div class="s-template-item-actions">
+        <button class="btn-secondary s-tpl-edit" data-name="${name}">编辑</button>
+        <button class="btn-secondary s-tpl-del" data-name="${name}" style="color:var(--danger)">删除</button>
+      </div>`;
+    list.appendChild(item);
+  });
+  list.querySelectorAll(".s-tpl-edit").forEach(b =>
+    b.addEventListener("click", () => openTemplateForm(b.dataset.name)));
+  list.querySelectorAll(".s-tpl-del").forEach(b =>
+    b.addEventListener("click", () => deleteTemplate(b.dataset.name)));
+}
+
+let _editingTemplate = null;
+
+function openTemplateForm(name) {
+  _editingTemplate = name || null;
+  const templates = state.config.templates || {};
+  const t = name ? (templates[name] || {}) : {};
+  $("s-template-form-title").textContent = name ? `编辑模板 — ${name}` : "新建模板";
+  $("st-name").value = t.name || "";
+  $("st-hero").value = t.default_hero || state.config.default_hero_name || "林然";
+  $("st-pov").value = t.default_pov || "second";
+  $("st-words").value = t.default_words || 200;
+  $("st-fav").checked = t.fav_enabled !== false;
+  $("st-content").value = t.content || "";
+  $("s-template-form").style.display = "block";
+}
+
+function closeTemplateForm() {
+  _editingTemplate = null;
+  $("s-template-form").style.display = "none";
+  $("st-name").value = "";
+  $("st-content").value = "";
+}
+
+function saveTemplate() {
+  const name = $("st-name").value.trim();
+  if (!name) { $("st-name").focus(); return; }
+  const content = $("st-content").value.trim();
+  if (!content) { $("st-content").focus(); return; }
+
+  const templates = { ...(state.config.templates || {}) };
+  if (_editingTemplate && _editingTemplate !== name) {
+    delete templates[_editingTemplate];
+    if (state.activeTemplate === _editingTemplate) state.activeTemplate = name;
+  }
+
+  templates[name] = {
+    name,
+    default_hero: $("st-hero").value.trim() || state.config.default_hero_name || "林然",
+    default_pov: $("st-pov").value,
+    default_words: parseInt($("st-words").value) || 200,
+    fav_enabled: $("st-fav").checked,
+    content
+  };
+
+  state.config.templates = templates;
+  postConfig({ templates });
+  closeTemplateForm();
+  renderTemplateList();
+  renderTemplateSelect();
+}
+
+function deleteTemplate(name) {
+  if (!confirm(`删除模板"${name}"？`)) return;
+  const templates = { ...(state.config.templates || {}) };
+  delete templates[name];
+  if (state.activeTemplate === name) state.activeTemplate = null;
+  state.config.templates = templates;
+  postConfig({ templates });
+  renderTemplateList();
+  renderTemplateSelect();
+}
+
+// 渲染预设/模板到 presets overlay
 function renderPresets() {
   const grid = $("presets-grid");
   if (!grid) return;
   grid.innerHTML = "";
-  PRESETS.forEach(preset => {
+  const templates = state.config.templates || {};
+  const names = Object.keys(templates);
+  if (names.length === 0) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:16px;color:var(--text-tertiary);font-size:12px">暂无模板，请先在设置中创建</div>';
+    return;
+  }
+  names.forEach(name => {
+    const t = templates[name];
     const btn = document.createElement("button");
-    btn.className = "preset-btn" + (state.activePreset === preset.id ? " active" : "");
-    btn.textContent = preset.name;
-    btn.title = preset.mode === "novel" ? "小说模式" : "RPG 模式";
+    btn.className = "preset-btn" + (state.activeTemplate === name ? " active" : "");
+    btn.textContent = t.name || name;
+    btn.title = "点击开始新故事";
     btn.addEventListener("click", () => {
-      applyPreset(preset);
+      state.activeTemplate = name;
       $("presets-overlay").classList.remove("open");
+      $("novel-new-story-btn").click();
     });
     grid.appendChild(btn);
   });
-}
-
-//260526 Red 应用预设：切换模式、注入场景提示词
-function applyPreset(preset) {
-  switchMode(preset.mode);
-  if (preset.sysPrompt) {
-    const inp = $("sys-prompt-input");
-    if (inp) { inp.value = preset.sysPrompt; autoResizeTextarea(inp); }
-    state.currentSystemPrompt = preset.sysPrompt;
-  }
-  state.activePreset = preset.id;
-  renderPresets();
 }
 
 function openCharLib() {
@@ -2714,6 +2862,16 @@ function setupEventListeners() {
 
   $("s-avatar-btn").addEventListener("click", () => $("s-avatar-input").click());
   $("s-avatar-preview").addEventListener("click", () => $("s-avatar-input").click());
+  // 模板管理事件
+  $("s-template-add-btn").addEventListener("click", () => openTemplateForm(null));
+  $("st-cancel").addEventListener("click", closeTemplateForm);
+  $("st-save").addEventListener("click", saveTemplate);
+  // 好感度开关控制阶段行显隐
+  $("ns-fav-enabled").addEventListener("change", () => {
+    const row = $("ns-stages-row");
+    if (row) row.style.display = $("ns-fav-enabled").checked ? "" : "none";
+  });
+
   $("s-avatar-input").addEventListener("change", async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -2803,55 +2961,60 @@ function setupEventListeners() {
   });
 
   //260523 Red 小说模式：角色现在从右上角角色库选择，此处无需绑定 select/add
-  //260523 Red 新故事按钮：打开故事设定面板
+  //260523 Red 新故事按钮：打开模板驱动的新故事面板
   $("novel-new-story-btn").addEventListener("click", () => {
-    $("ns-hero-name").value    = state.novelHeroName;
-    $("ns-story-dir").value    = state.novelStoryDir;
+    renderTemplateSelect();
+    const tpl = state.activeTemplate ? (state.config.templates || {})[state.activeTemplate] : null;
+    $("ns-hero-name").value  = state.novelHeroName || tpl?.default_hero || state.config.default_hero_name || "林然";
+    $("ns-story-dir").value  = state.novelStoryDir || "";
     autoResizeTextarea($("ns-story-dir"));
-    $("ns-pov").value          = state.novelPov;
-    $("ns-word-count").value   = state.novelWordCount;
-    $("ns-start-fav").value = state.novelFav;
-    // 回填阶段名称和上限
-    const nameInputs = [...document.querySelectorAll(".ns-stage-name")];
-    const capInputs  = [...document.querySelectorAll(".ns-stage-cap")];
-    const ruleInputs = [...document.querySelectorAll(".ns-stage-rule")];
-    state.novelStages.forEach((s, i) => {
-      if (nameInputs[i]) nameInputs[i].value = s.name;
-      if (capInputs[i])  capInputs[i].value  = i < 4 ? s.cap : "";
-      if (ruleInputs[i]) ruleInputs[i].value = s.rule || "";
-    });
+    $("ns-pov").value = state.novelPov || tpl?.default_pov || "third";
+    $("ns-word-count").value   = state.novelWordCount || tpl?.default_words || 200;
+    $("ns-start-fav").value    = state.novelFav || 0;
+    $("ns-fav-enabled").checked = state.novelFavEnabled !== false;
+    renderNovelStages();
     $("novel-setup-overlay").classList.add("open");
-    // 260523 Red 打开面板时对 textarea 触发一次自动高度
     setTimeout(() => autoResizeTextarea($("ns-story-dir")), 0);
+  });
+  // 添加阶段按钮
+  $("ns-stage-add").addEventListener("click", () => {
+    const last = state.novelStages[state.novelStages.length - 1];
+    const newCap = last ? last.cap + 30 : 30;
+    state.novelStages.push({
+      name: `阶段${state.novelStages.length + 1}`,
+      cap: Math.min(newCap, 999),
+      rule: ""
+    });
+    renderNovelStages();
   });
   $("ns-story-dir").addEventListener("input", () => autoResizeTextarea($("ns-story-dir")));
   $("novel-setup-cancel").addEventListener("click", () => {
     $("novel-setup-overlay").classList.remove("open");
   });
   $("novel-setup-confirm").addEventListener("click", () => {
-    state.novelHeroName  = $("ns-hero-name").value.trim() || "林然";
-    state.novelStoryDir  = $("ns-story-dir").value.trim();
-    state.novelPov       = $("ns-pov").value;
-    state.novelWordCount = parseInt($("ns-word-count").value) || 200;
-    state.novelFav       = parseInt($("ns-start-fav").value) || 0;
-    // 读取自定义阶段（名称 + 上限 + 行为规则）
-    const names = [...document.querySelectorAll(".ns-stage-name")].map(el => el.value.trim());
-    const caps  = [...document.querySelectorAll(".ns-stage-cap")].map(el => parseInt(el.value) || 0);
-    const rules = [...document.querySelectorAll(".ns-stage-rule")].map(el => el.value.trim());
+    state.novelHeroName    = $("ns-hero-name").value.trim() || state.config.default_hero_name || "林然";
+    state.novelStoryDir    = $("ns-story-dir").value.trim();
+    state.novelPov         = $("ns-pov").value;
+    state.novelWordCount   = parseInt($("ns-word-count").value) || 200;
+    state.novelFavEnabled  = $("ns-fav-enabled").checked;
+    state.novelFav         = parseInt($("ns-start-fav").value) || 0;
+    // 从动态表格读取阶段
+    const stageRows = [...document.querySelectorAll("#ns-stages-table .ns-stage-row")];
     const defaultStages = [
-      { name: "陌生人", cap: 20, rule: "保持礼貌距离，禁止任何肢体接触、暧昧动作和亲密话语" },
-      { name: "相识",   cap: 45, rule: "可有日常接触（握手、碰肩），限于普通朋友范畴，禁止暧昧" },
-      { name: "朋友",   cap: 70, rule: "友好亲近，可自然接触，禁止任何暧昧行为和亲密描写" },
-      { name: "暧昧",   cap: 90, rule: "可有明显暧昧互动（牵手、对视），禁止成人向描写" },
-      { name: "恋人",   cap: 100, rule: "可有亲密表达，视剧情自然推进，禁止无铺垫的成人向内容" }
+      { name: "陌生人", cap: 20, rule: "保持礼貌距离" },
+      { name: "相识",   cap: 45, rule: "日常接触范畴" },
+      { name: "朋友",   cap: 70, rule: "友好亲近" },
+      { name: "暧昧",   cap: 90, rule: "可有暧昧互动" },
+      { name: "恋人",   cap: 100, rule: "可亲密表达" }
     ];
-    state.novelStages = defaultStages.map((d, i) => ({
-      name: names[i] || d.name,
-      cap:  i < 4 ? (caps[i] || d.cap) : 100,
-      rule: rules[i] || d.rule
-    }));
-    // 确保 cap 单调递增
-    for (let i = 1; i < 4; i++) {
+    state.novelStages = stageRows.map((row, i) => {
+      const name = row.querySelector(".ns-stage-name")?.value?.trim() || defaultStages[i]?.name || `阶段${i+1}`;
+      const cap  = parseInt(row.querySelector(".ns-stage-cap")?.value) || (defaultStages[i]?.cap || 100);
+      const rule = row.querySelector(".ns-stage-rule")?.value?.trim() || defaultStages[i]?.rule || "";
+      return { name, cap, rule };
+    });
+    // 确保 cap 递增
+    for (let i = 1; i < state.novelStages.length; i++) {
       if (state.novelStages[i].cap <= state.novelStages[i-1].cap)
         state.novelStages[i].cap = state.novelStages[i-1].cap + 1;
     }
@@ -2859,12 +3022,10 @@ function setupEventListeners() {
     updateNovelFavBar();
     $("novel-setup-overlay").classList.remove("open");
 
-    //260523 Red 开场白：有则开新对话并插入首条 AI 消息
     const heroine = (state.config.novel_heroines || {})[state.novelHeroine];
     const opening = heroine?.opening?.trim();
     if (opening) {
       newChat();
-      // 稍等 newChat 清空后再渲染，避免时序问题
       setTimeout(() => injectOpeningMessage(opening), 50);
     }
   });

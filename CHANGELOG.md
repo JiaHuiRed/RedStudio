@@ -7,6 +7,34 @@
 
 ---
 
+## [3.5.0] - 2026-05-27
+
+### 架构统一
+
+- **选择系统统一**：小说和 RPG 模式统一使用 `[CHOICES]` 块解析（`parseContentBlocks`），删除旧 `parseStoryContent()` 和两套独立选项渲染路径
+- **统一交互**：两模式选项按钮共用 `.novel-choice-btn` CSS，点击均自动发送（`setTimeout(sendMessage, 300)`），不再填充输入框等待手动回车
+- **选项类型检测**：`parseContentBlocks` 自动识别第二字段是数值（好感变化）还是字符串（RPG 类型如 combat/dialogue），两模式共用同一解析器
+- **CSS 精简**：移除 `.story-choices` / `.story-choice-btn` 全套样式
+
+### 小说模式
+
+- **模板系统**：设置面板新增模板管理（增/删/改），模板存储用户自定义 prompt + 默认主角/POV/字数/好感开关；内置"言情宿舍"和"体育竞技"预置模板
+- **动态好感阶段**：阶段表改为可增删行的 `renderNovelStages()`，告别硬编码 5 行；好感上限自动取最后阶段 cap，不再锁死 100
+- **视角精简**：移除第二人称选项，保留第一/第三人称，默认第三人称
+- **历史重命名**：对话历史条目新增重命名按钮（✎），支持 prompt 弹窗改名
+- **打开动画修 bug**：`injectOpeningMessage()` 中 `renderNovelChapter` 参数传反，导致开场白 `[CHOICES]` 选项不渲染
+
+### RPG 模式
+
+- **角色提取独立**：RPG 的 NPC `[角色名]` 前缀提取抽为独立函数 `extractCharName()`，不再耦合 `parseStoryContent()`
+- **选项自动发送**：`renderRpgChapter()` 点击选项后自动发送，与小说模式行为一致
+
+### 杂项
+
+- **应用图标**：换为去白底皮卡丘多分辨率 ICO（16/32/48/64/128/256），替换原精灵球图标
+
+---
+
 ## [3.4.1] - 2026-05-25
 
 ### 修复

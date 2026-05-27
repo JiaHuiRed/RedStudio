@@ -1977,7 +1977,7 @@ body[data-mode="novel"] #mode-section {
   overflow-y: auto;
   max-height: 200px;
 }
-#ns-start-fav { width: 100%; cursor: pointer; }
+#ns-start-fav { cursor: pointer; }
 #ns-stages-table { display: flex; flex-direction: column; gap: 4px; }
 .ns-stage-row { display: flex; gap: 6px; align-items: center; }
 .ns-stage-name {
@@ -1997,6 +1997,31 @@ body[data-mode="novel"] #mode-section {
   width: 58px; text-align: center;
   font-size: 12px; color: var(--text-tertiary);
 }
+.ns-stage-del {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+}
+.ns-stage-del:hover {
+  color: var(--danger);
+  background: rgba(255,59,48,0.1);
+}
+#ns-stage-add:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-subtle);
+}
+
 .ns-stage-rule {
   flex: 1.5; min-width: 0;
   padding: 5px 8px; border-radius: 6px;
@@ -2088,31 +2113,6 @@ body[data-mode="novel"] #mode-section {
   transform: scale(1.1);
   box-shadow: 0 0 0 2px var(--accent);
 }
-
-/* 选项按钮区 */
-.story-choices {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  margin-top: 8px;
-}
-.story-choice-btn {
-  padding: 8px 14px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--accent);
-  background: var(--accent-subtle);
-  color: var(--accent);
-  font-size: 13px;
-  font-family: var(--font);
-  cursor: pointer;
-  text-align: left;
-  transition: background 0.15s, color 0.15s, transform 0.1s;
-  word-break: break-word;
-  user-select: text;
-  line-height: 1.45;
-}
-.story-choice-btn:hover { background: var(--accent); color: #fff; }
-.story-choice-btn:active { transform: scale(0.97); }
 
 /* ═══════════════════════════════════════════════════════════
    260515 Red Token 总计显示（input-footer 右侧）
@@ -2297,6 +2297,83 @@ body[data-mode="novel"] #mode-section {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(0,122,255,0.12);
 }
+
+/* ── 模板管理（设置面板内） ────────────────────────────────── */
+.s-template-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--input-border);
+  gap: 8px;
+}
+.s-template-item:last-child { border-bottom: none; }
+.s-template-item-info { flex: 1; min-width: 0; }
+.s-template-item-name {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-primary);
+  display: block;
+}
+.s-template-item-preview {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.s-template-item-actions { display: flex; gap: 5px; flex-shrink: 0; }
+.s-template-item-actions button {
+  padding: 3px 8px;
+  font-size: 11px;
+  border-radius: 6px;
+}
+
+/* ── 模板选择器（新故事面板） ────────────────────────────── */
+.ns-template-btn {
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--input-border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.ns-template-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-subtle);
+}
+.ns-template-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 500;
+}
+
+/* ── 历史重命名 ─────────────────────────────────────────── */
+.history-rename-btn {
+  flex-shrink: 0;
+  display: none;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0;
+  transition: color 0.12s, background 0.12s;
+  align-items: center;
+  justify-content: center;
+}
+.history-item:hover .history-rename-btn { display: flex; }
+.history-rename-btn:hover { color: var(--accent); background: rgba(0,122,255,0.1); }
 
 /* ── 角色库 overlay ──────────────────────────────────────── */
 #charlib-overlay {

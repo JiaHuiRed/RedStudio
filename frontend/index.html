@@ -319,6 +319,40 @@
       </div>
     </div>
     <div class="settings-group">
+      <div class="settings-group-title">写作模板</div>
+      <div id="s-template-list"></div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn-secondary" id="s-template-add-btn" style="flex:1">+ 新建模板</button>
+      </div>
+      <div id="s-template-form" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--input-border)">
+        <div id="s-template-form-title" style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px"></div>
+        <div class="settings-row"><label>模板名称</label><input type="text" id="st-name" placeholder="如：言情宿舍" maxlength="30" /></div>
+        <div class="settings-row" style="flex-direction:row;gap:12px">
+          <div style="flex:1"><label>默认男主名</label><input type="text" id="st-hero" placeholder="林然" maxlength="20" /></div>
+          <div style="width:100px"><label>默认视角</label>
+            <select id="st-pov">
+              <option value="third" selected>第三人称</option>
+              <option value="first">第一人称</option>
+            </select>
+          </div>
+          <div style="width:90px"><label>默认字数</label><input type="number" id="st-words" value="200" min="50" max="1000" step="50" /></div>
+        </div>
+        <div class="settings-row"><label>好感度系统 <span style="font-weight:400;color:var(--text-tertiary);font-size:11px">（开启后每轮自动注入好感度提醒）</span></label>
+          <label style="flex-direction:row;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+            <input type="checkbox" id="st-fav" checked /> 启用好感度
+          </label>
+        </div>
+        <div class="settings-row" style="flex-direction:column;align-items:stretch">
+          <label>模板内容 <span style="font-weight:400;color:var(--text-tertiary);font-size:11px">支持 {hero_name} {story_dir} {word_count} {pov} 占位符</span></label>
+          <textarea id="st-content" rows="10" placeholder="粘贴你的完整提示词模板内容…" style="width:100%;padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--input-border);background:var(--input-bg);color:var(--text-primary);font-size:13px;font-family:var(--font);resize:vertical;outline:none;line-height:1.5;box-sizing:border-box"></textarea>
+        </div>
+        <div class="settings-actions">
+          <button class="btn-secondary" id="st-cancel">取消</button>
+          <button class="btn-primary" id="st-save">保存</button>
+        </div>
+      </div>
+    </div>
+    <div class="settings-group">
       <div class="settings-group-title">朗读（TTS）</div>
       <div class="settings-row">
         <label>引擎</label>
@@ -518,43 +552,40 @@
   </div>
 </div>
 
-<!-- 260523 Red 小说新故事设定面板 -->
+<!-- 260523 Red 小说新故事设定面板（模板驱动） -->
 <div id="novel-setup-overlay" class="hidden">
   <div id="novel-setup-panel">
-    <h2>新故事设定</h2>
-    <div class="settings-row">
-      <label>主角名称</label>
-      <input type="text" id="ns-hero-name" placeholder="林然" maxlength="20"/>
+    <h2>新故事</h2>
+    <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px">
+      <label>选择模板 <span style="font-weight:400;color:var(--text-tertiary);font-size:11px">（在设置中管理模板）</span></label>
+      <div id="ns-template-select" style="display:flex;flex-wrap:wrap;gap:6px"></div>
     </div>
     <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px">
-      <label>故事方向 / 主角背景</label>
-      <textarea id="ns-story-dir" rows="3" placeholder="例：女明星恋爱故事，林然是她的经纪人。可在此补充主角的外貌、职业、性格等。"></textarea>
+      <label>故事方向 <span style="font-weight:400;color:var(--text-tertiary);font-size:11px">（模板中 {story_dir} 占位符将被替换为此内容）</span></label>
+      <textarea id="ns-story-dir" rows="3" placeholder="例：林然是大学女生宿舍的宿管员…"></textarea>
     </div>
-    <div class="settings-row">
-      <label>叙事视角</label>
-      <select id="ns-pov">
-        <option value="first">第一人称（我 / 林然）</option>
-        <option value="second">第二人称（你 / 林然）</option>
-        <option value="third">第三人称（他 / 林然）</option>
-      </select>
-    </div>
-    <div class="settings-row">
-      <label>正文字数/轮</label>
-      <input id="ns-word-count" type="number" value="200" min="100" max="500" step="50">
-    </div>
-    <div class="settings-row">
-      <label>好感度起始值</label>
-      <input id="ns-start-fav" type="number" value="0" min="0" max="99" style="width:64px">
-    </div>
-    <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px">
-      <label>阶段划分（名称 · 上限 · 行为规则，共 5 段）</label>
-      <div id="ns-stages-table">
-        <div class="ns-stage-row"><input class="ns-stage-name" type="text" placeholder="阶段1名称"><input class="ns-stage-cap" type="number" placeholder="上限" min="1" max="99"><input class="ns-stage-rule" type="text" placeholder="此阶段AI行为约束…"></div>
-        <div class="ns-stage-row"><input class="ns-stage-name" type="text" placeholder="阶段2名称"><input class="ns-stage-cap" type="number" placeholder="上限" min="1" max="99"><input class="ns-stage-rule" type="text" placeholder="此阶段AI行为约束…"></div>
-        <div class="ns-stage-row"><input class="ns-stage-name" type="text" placeholder="阶段3名称"><input class="ns-stage-cap" type="number" placeholder="上限" min="1" max="99"><input class="ns-stage-rule" type="text" placeholder="此阶段AI行为约束…"></div>
-        <div class="ns-stage-row"><input class="ns-stage-name" type="text" placeholder="阶段4名称"><input class="ns-stage-cap" type="number" placeholder="上限" min="1" max="99"><input class="ns-stage-rule" type="text" placeholder="此阶段AI行为约束…"></div>
-        <div class="ns-stage-row"><input class="ns-stage-name" type="text" placeholder="阶段5名称"><span class="ns-stage-final">100</span><input class="ns-stage-rule" type="text" placeholder="此阶段AI行为约束…"></div>
+    <div class="settings-row" style="flex-direction:row;gap:12px">
+      <div style="flex:2"><label>男主名</label><input type="text" id="ns-hero-name" maxlength="20"/></div>
+      <div style="flex:1"><label>视角</label>
+        <select id="ns-pov">
+          <option value="third" selected>第三人称（他/{hero_name}）</option>
+          <option value="first">第一人称（我/{hero_name}）</option>
+        </select>
       </div>
+      <div style="width:80px"><label>字数/轮</label><input id="ns-word-count" type="number" min="50" max="1000" step="50"></div>
+    </div>
+    <div class="settings-row" style="flex-direction:row;align-items:center;gap:10px">
+      <label style="flex-direction:row;align-items:center;gap:6px;font-size:13px;cursor:pointer;margin:0">
+        <input type="checkbox" id="ns-fav-enabled" checked /> 好感度系统
+      </label>
+      <label style="flex-direction:row;align-items:center;gap:4px;font-size:12px;color:var(--text-tertiary);margin:0">
+        起始值 <input id="ns-start-fav" type="number" value="0" min="0" max="99" style="width:50px;padding:3px 6px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text-primary);font-size:12px;text-align:center;outline:none">
+      </label>
+    </div>
+    <div class="settings-row" id="ns-stages-row" style="flex-direction:column;align-items:stretch;gap:4px">
+      <label style="font-size:12px;color:var(--text-tertiary)">好感度阶段（名称 · 上限 · 行为规则）</label>
+      <div id="ns-stages-table"></div>
+      <button id="ns-stage-add" style="align-self:flex-start;padding:3px 10px;border-radius:6px;border:1px dashed var(--input-border);background:transparent;color:var(--text-tertiary);font-size:11px;font-family:var(--font);cursor:pointer;transition:all 0.15s">+ 添加阶段</button>
     </div>
     <div class="settings-actions">
       <button class="btn-secondary" id="novel-setup-cancel">取消</button>
