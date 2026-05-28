@@ -56,7 +56,7 @@
 
       <!-- 260522 Red 模式切换 pill：故事（角色扮演）/ 小说（互动写作） -->
       <div id="mode-tabs">
-        <button class="mode-tab active" data-mode="rpg">RPG</button>
+        <button class="mode-tab active" data-mode="rpg">JRPG</button>
         <button class="mode-tab" data-mode="novel">小说</button>
         <button id="presets-trigger" title="快速预设">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -185,16 +185,27 @@
       </div>
     </div>
 
-    <!-- 260523 Red RPG 模式多指标状态栏（仅 RPG 模式可见） -->
+    <!-- JRPG 模式状态栏 -->
     <div id="rpg-status-bar" class="hidden">
       <span class="rpg-stat" id="rpg-hp">❤️ <strong id="rpg-hp-val">100</strong>/<span id="rpg-hp-max">100</span></span>
       <span class="rpg-stat" id="rpg-mp">💙 <strong id="rpg-mp-val">50</strong>/<span id="rpg-mp-max">50</span></span>
       <span class="rpg-stat-sep">·</span>
       <span class="rpg-stat">⭐ Lv.<strong id="rpg-lv">1</strong></span>
-      <span class="rpg-stat">✨ <strong id="rpg-exp-val">0</strong>/<span id="rpg-exp-next">100</span></span>
+      <span class="rpg-stat">✨ <strong id="rpg-exp-val">0</strong>/<span id="rpg-exp-next">100</strong></span>
       <span class="rpg-stat-sep">·</span>
       <span class="rpg-stat">💰 <strong id="rpg-gold">50</strong></span>
+      <span class="rpg-stat-sep">·</span>
+      <span class="rpg-stat" title="德行">🎖<strong id="rpg-social-virtue">5</strong></span>
+      <span class="rpg-stat" title="智识">📚<strong id="rpg-social-intel">5</strong></span>
+      <span class="rpg-stat" title="体魄">💪<strong id="rpg-social-body">5</strong></span>
+      <span class="rpg-stat" title="魅力">💖<strong id="rpg-social-charm">5</strong></span>
       <span id="rpg-char-name-tag"></span>
+      <button id="jrpg-npc-toggle" class="rpg-stat-btn" title="NPC 关系">👥</button>
+    </div>
+
+    <!-- JRPG NPC 关系面板 -->
+    <div id="jrpg-npc-panel" class="hidden">
+      <div id="jrpg-npc-list"></div>
     </div>
 
     <!-- 260523 Red 小说模式好感度状态栏（仅小说模式可见） -->
@@ -536,14 +547,13 @@
       <div class="rpg-stat-item"><label>体质</label><input class="rpg-stat-input" id="rpg-vit" type="number" value="10" min="5" max="20"></div>
     </div>
     <div class="settings-group-title" style="font-size:12px;color:var(--text-secondary);margin:8px 0 6px">
-      社交属性（Persona 5 风格，各 1-5，影响对话选项解锁）
+      社交属性（各 1-10，影响对话选项解锁和好感度获取）
     </div>
     <div id="rpg-social-grid">
-      <div class="rpg-stat-item"><label>知识</label><input class="rpg-stat-input" id="rpg-knowledge" type="number" value="1" min="1" max="5"></div>
-      <div class="rpg-stat-item"><label>魅力</label><input class="rpg-stat-input" id="rpg-charm" type="number" value="1" min="1" max="5"></div>
-      <div class="rpg-stat-item"><label>胆识</label><input class="rpg-stat-input" id="rpg-guts" type="number" value="1" min="1" max="5"></div>
-      <div class="rpg-stat-item"><label>亲切</label><input class="rpg-stat-input" id="rpg-kindness" type="number" value="1" min="1" max="5"></div>
-      <div class="rpg-stat-item"><label>手艺</label><input class="rpg-stat-input" id="rpg-craft" type="number" value="1" min="1" max="5"></div>
+      <div class="rpg-stat-item"><label>德行</label><input class="rpg-stat-input" id="rpg-virtue" type="number" value="5" min="1" max="10"></div>
+      <div class="rpg-stat-item"><label>智识</label><input class="rpg-stat-input" id="rpg-intel" type="number" value="5" min="1" max="10"></div>
+      <div class="rpg-stat-item"><label>体魄</label><input class="rpg-stat-input" id="rpg-body" type="number" value="5" min="1" max="10"></div>
+      <div class="rpg-stat-item"><label>魅力</label><input class="rpg-stat-input" id="rpg-charm" type="number" value="5" min="1" max="10"></div>
     </div>
     <div class="settings-actions">
       <button class="btn-secondary" id="rpg-setup-cancel">取消</button>

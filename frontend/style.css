@@ -1766,6 +1766,99 @@ body[data-mode="novel"] #mode-section {
   font-weight: 500;
 }
 
+/* JRPG NPC 关系面板 */
+.rpg-stat-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+.rpg-stat-btn:hover { opacity: 1; }
+#jrpg-npc-panel {
+  padding: 6px 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--sidebar-border);
+  max-height: 160px;
+  overflow-y: auto;
+}
+#jrpg-npc-panel.hidden { display: none; }
+#jrpg-npc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.jrpg-npc-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.jrpg-npc-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  flex-shrink: 0;
+}
+.jrpg-npc-info {
+  flex: 1;
+  min-width: 0;
+}
+.jrpg-npc-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.jrpg-npc-role {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+.jrpg-npc-fav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.jrpg-npc-fav-track {
+  width: 50px;
+  height: 4px;
+  background: var(--input-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.jrpg-npc-fav-fill {
+  height: 100%;
+  background: #e67e22;
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+.jrpg-npc-stage {
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.jrpg-npc-save-btn {
+  background: none;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 1px 4px;
+  color: var(--text-secondary);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.jrpg-npc-item:hover .jrpg-npc-save-btn { opacity: 1; }
+.jrpg-npc-save-btn:hover { border-color: #e67e22; color: #e67e22; }
+
 /* 260523 Red RPG 角色创建面板 */
 #rpg-setup-overlay {
   display: none;
@@ -1796,7 +1889,6 @@ body[data-mode="novel"] #mode-section {
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;
 }
-#rpg-social-grid { grid-template-columns: repeat(5, 1fr); }
 .rpg-stat-item { display: flex; flex-direction: column; align-items: center; gap: 3px; }
 .rpg-stat-item label { font-size: 11px; color: var(--text-secondary); }
 .rpg-stat-input {

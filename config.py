@@ -71,7 +71,58 @@ DEFAULT_CONFIG = {
             "fav_enabled": False,
             "content": "你是一部体育竞技小说的写手，负责推进故事，扮演除{hero_name}以外的所有角色。\n\n【故事方向】\n{story_dir}\n\n【输出格式】\n第一行：【本段标题】\n第二行：📍地点 · 🕐时间\n正文约{word_count}字，{pov}人称叙事，自然推进。\n\n【选项】每轮末尾给出4个具体行动选项，用 A/B/C/D 列出。\n\n注意：保持叙事连贯，球员/角色由你自主随机生成，注意多样性。"
         }
-    }
+    },
+    # JRPG 模式预置模板
+    "jrpg_templates": {
+        "校园异世界": {
+            "name": "校园异世界",
+            "world_desc": "现代都市，表面是普通高中/大学校园，但部分人拥有进入'心之世界'的能力。心之世界是人们内心阴暗面具象化的异空间，腐败之人的心之世界会扭曲成危险的迷宫。",
+            "story_structure": [
+                {"act": "序章：日常", "desc": "校园生活，遇到女角色们，发现异世界入口"},
+                {"act": "第一幕：觉醒", "desc": "首次进入异世界，获得战斗能力，与第一个女角色建立羁绊"},
+                {"act": "第二幕：集结", "desc": "依次攻略2-3个异世界迷宫，每个迷宫对应一个女角色的故事线"},
+                {"act": "第三幕：真相", "desc": "发现大boss是校内某位权威人物"},
+                {"act": "第四幕：低谷", "desc": "遭遇挫折，某位女角色陷入危机"},
+                {"act": "第五幕：决战", "desc": "集结所有伙伴，最终对决"},
+                {"act": "终章：日常", "desc": "回归校园，结局根据好感度分支"}
+            ],
+            "npc_count": 5,
+            "npc_pool": [
+                {"name": "陈思雨", "role": "同班同学", "personality": "内向、细腻、毒舌", "appearance": "长发及腰、黑框眼镜、气质清冷", "body": "纤细、平胸、腿长105cm", "likes": "读书、写诗、深夜电台"},
+                {"name": "李晓萌", "role": "邻班体育生", "personality": "开朗、直爽、好胜", "appearance": "马尾辫、小麦肤色、笑容灿烂", "body": "健美、翘臀、腿长110cm", "likes": "篮球、跑步、吃炸鸡"},
+                {"name": "王月琪", "role": "学生会副会长", "personality": "优雅、要强、外冷内热", "appearance": "短发齐耳、精致五官、气质出众", "body": "高挑、胸围C、腿长115cm", "likes": "钢琴、辩论、红酒"},
+                {"name": "赵灵", "role": "神秘转校生", "personality": "沉默、冷淡、偶尔温柔", "appearance": "银色长发、紫眸、气质空灵", "body": "娇小、胸围B、腿长95cm", "likes": "天文、摄影、深夜散步"},
+                {"name": "林可欣", "role": "青梅竹马", "personality": "活泼、话多、爱吃醋", "appearance": "双马尾、圆脸、酒窝", "body": "匀称、胸围B+、腿长108cm", "likes": "动漫、游戏、做饭"}
+            ],
+            "type_chart": {
+                "fire":  {"name": "火", "emoji": "🔥", "strong": ["ice", "wood"],   "weak": ["water", "ground"]},
+                "water": {"name": "水", "emoji": "💧", "strong": ["fire", "ground"], "weak": ["thunder", "ice", "wood"]},
+                "ground":{"name": "地", "emoji": "🌍", "strong": ["thunder", "fire"], "weak": ["water", "wind", "wood"]},
+                "wind":  {"name": "风", "emoji": "🌪", "strong": ["ground", "wood"], "weak": ["ice", "thunder"]},
+                "ice":   {"name": "冰", "emoji": "❄️", "strong": ["wind", "water", "wood"], "weak": ["fire"]},
+                "thunder":{"name": "雷", "emoji": "⚡", "strong": ["water", "wind"],  "weak": ["ground"]},
+                "wood":  {"name": "木", "emoji": "🌳", "strong": ["water", "ground"], "weak": ["fire", "ice", "wind"]},
+                "light": {"name": "光", "emoji": "✨", "strong": ["dark"],           "weak": ["dark"]},
+                "dark":  {"name": "暗", "emoji": "🌑", "strong": ["light"],          "weak": ["light"]},
+                "omni":  {"name": "全", "emoji": "💫", "strong": [],                 "weak": []}
+            },
+            "social_attrs": ["德行", "智识", "体魄", "魅力"],
+            "social_desc": {
+                "德行": "领导力与正义感，影响NPC信任度和队伍管理选项",
+                "智识": "学识与分析力，影响解谜和知识型对话选项",
+                "体魄": "运动与战斗能力，影响物理挑战和战斗选项",
+                "魅力": "外在吸引力，直接影响好感度获取倍率"
+            },
+            "fav_stages": [
+                {"name": "陌生人", "cap": 20, "rule": "保持礼貌距离，普通同学关系"},
+                {"name": "朋友", "cap": 50, "rule": "友好亲近，可有日常接触"},
+                {"name": "暧昧", "cap": 80, "rule": "可有暧昧互动，感情升温"},
+                {"name": "恋人", "cap": 100, "rule": "可亲密表达，正式恋爱关系"}
+            ]
+        }
+    },
+    # JRPG 角色库（用户保存的NPC模板）
+    "jrpg_npc_library": {}
 }
 
 

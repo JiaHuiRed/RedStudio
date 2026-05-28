@@ -282,14 +282,18 @@ const state = {
   //260523 Red RPG 模式角色与状态
   rpgChar: {
     name: "", class: "", background: "",
-    str: 10, agi: 10, int: 10, vit: 10,
-    knowledge: 1, charm: 1, guts: 1, kindness: 1, craft: 1
+    str: 10, agi: 10, int: 10, vit: 10
   },
   rpgStatus: {
     hp: 100, hpMax: 100, mp: 50, mpMax: 50,
     lv: 1, exp: 0, expNext: 100, gold: 50
   },
   rpgWorldDir: "",          // 世界/故事方向
+  // JRPG 模式状态
+  jrpgNpcs: [],             // 当前游戏的NPC列表 [{name, role, personality, appearance, body, likes, fav, stage, avatar, element}]
+  jrpgSocial: { 德行: 5, 智识: 5, 体魄: 5, 魅力: 5 },  // 社交属性
+  jrpgTemplate: "校园异世界",  // 当前使用的JRPG模板名
+  jrpgSavedNpcs: [],        // 从角色库导入的NPC（用户保存的）
   novelHeroine: "",         //#260522 Red 当前选中的小说模式女主角名称
   //260523 Red 作者注记
   authorNote:      "",  // 注入 context 靠后位置的临时指令
@@ -552,11 +556,11 @@ function streamReply(model) {
   // 260521 Red 保存流式上下文，供信号处理函数访问
   state.streamCtx = { bubble, content, avatarEl, ctx, usageData: null, renderTimer: null };
 
-  //#260522 Red 构造请求：小说模式自动构建，故事模式注入角色卡，其余使用手动输入
+  //#260522 Red 构造请求：小说模式自动构建，JRPG模式使用模板化提示词，其余使用手动输入
   const sysPrompt = state.mode === "novel"
     ? buildNovelSystemPrompt()
     : state.mode === "rpg"
-      ? (buildRpgSystemPrompt() + (state.currentSystemPrompt.trim() ? "\n\n" + state.currentSystemPrompt.trim() : ""))
+      ? (buildJrpgSystemPrompt() + (state.currentSystemPrompt.trim() ? "\n\n" + state.currentSystemPrompt.trim() : ""))
       : state.currentSystemPrompt.trim();
   const baseMessages = sysPrompt
     ? [{ role: "system", content: sysPrompt }, ...state.messages]
@@ -893,7 +897,7 @@ function renderModeSection() {
   if (mode === "rpg") {
     const label = document.createElement("div");
     label.className = "mode-label";
-    label.textContent = "角色 / 世界";
+    label.textContent = "JRPG 角色";
     body.appendChild(label);
     const btn = document.createElement("button");
     btn.className = "mode-action-btn rpg-start";
@@ -1177,6 +1181,9 @@ function newChat() {
   state.novelFavEnabled = true;
   $("author-note-input").value = "";
   $("author-note-bar").classList.remove("open", "active");
+  // 重置JRPG状态
+  state.jrpgNpcs   = [];
+  state.jrpgSocial = { 德行: 5, 智识: 5, 体魄: 5, 魅力: 5 };
 
   messagesEl.innerHTML = "";
   messagesEl.appendChild(makeWelcome());
@@ -1214,6 +1221,8 @@ function saveChatHistory() {
     existing.rpgChar           = { ...state.rpgChar };
     existing.rpgStatus         = { ...state.rpgStatus };
     existing.rpgWorldDir       = state.rpgWorldDir;
+    existing.jrpgNpcs          = JSON.parse(JSON.stringify(state.jrpgNpcs));
+    existing.jrpgSocial        = { ...state.jrpgSocial };
   } else {
     const newId = state.nextChatId++;
     state.currentChatId = newId;
@@ -1240,7 +1249,9 @@ function saveChatHistory() {
       authorNoteDepth:   state.authorNoteDepth,
       rpgChar:           { ...state.rpgChar },
       rpgStatus:         { ...state.rpgStatus },
-      rpgWorldDir:       state.rpgWorldDir
+      rpgWorldDir:       state.rpgWorldDir,
+      jrpgNpcs:          JSON.parse(JSON.stringify(state.jrpgNpcs)),
+      jrpgSocial:        { ...state.jrpgSocial }
     });
   }
 
@@ -1340,9 +1351,16 @@ function loadChat(chat) {
   state.novelStoryDir       = chat.novelStoryDir     || "";
   state.authorNote          = chat.authorNote        || "";
   state.authorNoteDepth     = chat.authorNoteDepth   ?? 3;
-  if (chat.rpgChar)   state.rpgChar   = { ...state.rpgChar,   ...chat.rpgChar };
+  // 旧存档兼容：过滤 rpgChar 中已废弃的社交属性字段
+  if (chat.rpgChar) {
+    const { knowledge, charm, guts, kindness, craft, ...cleanRpgChar } = chat.rpgChar;
+    state.rpgChar = { ...state.rpgChar, ...cleanRpgChar };
+  }
   if (chat.rpgStatus) state.rpgStatus = { ...state.rpgStatus, ...chat.rpgStatus };
   state.rpgWorldDir         = chat.rpgWorldDir       || "";
+  // 恢复JRPG状态
+  state.jrpgNpcs            = Array.isArray(chat.jrpgNpcs) ? chat.jrpgNpcs : [];
+  state.jrpgSocial          = chat.jrpgSocial || { 德行: 5, 智识: 5, 体魄: 5, 魅力: 5 };
   updateRpgStatusBar();
   updateNovelFavBar();
   updateNovelHeroineTag();
@@ -2073,6 +2091,24 @@ function extractCharName(text) {
   return m ? m[1] : null;
 }
 
+// 解析JRPG好感度标签：[FAV:NPC名±数值]
+function parseJrpgFav(text) {
+  if (!text || state.jrpgNpcs.length === 0) return [];
+  const results = [];
+  const regex = /\[FAV:([^\]]+?)([+-]\d+)\]/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    const npcName = match[1];
+    const delta = parseInt(match[2]);
+    const npc = state.jrpgNpcs.find(n => n.name === npcName);
+    if (npc) {
+      applyJrpgFavDelta(npcName, delta);
+      results.push({ name: npcName, delta, newFav: npc.fav, stage: npc.stage });
+    }
+  }
+  return results;
+}
+
 //260523 Red 小说章回渲染：正文走 Markdown，选项变按钮（含好感变化徽章）
 function renderNovelChapter(content, bubble, text) {
   const { mainText, choices, favDelta } = parseContentBlocks(text);
@@ -2263,6 +2299,7 @@ function parseRpgStatus(text) {
   const block = m[1];
   const g = (re) => { const r = block.match(re); return r ? parseInt(r[1]) : null; };
   const s = state.rpgStatus;
+  const oldLv = s.lv;
   const hp    = block.match(/HP:(\d+)\/(\d+)/);
   const mp    = block.match(/MP:(\d+)\/(\d+)/);
   const lv    = g(/Lv\.(\d+)/);
@@ -2273,6 +2310,10 @@ function parseRpgStatus(text) {
   if (lv !== null)  s.lv = lv;
   if (exp)  { s.exp = parseInt(exp[1]); s.expNext = parseInt(exp[2]); }
   if (gold !== null) s.gold = gold;
+  // 升级通知
+  if (s.lv > oldLv) {
+    showToast(`🎉 LEVEL UP! Lv.${oldLv} → Lv.${s.lv}  HP/MP上限提升！`);
+  }
   updateRpgStatusBar();
   return text.slice(0, m.index).trimEnd() + text.slice(m.index + m[0].length).trimStart();
 }
@@ -2280,12 +2321,18 @@ function parseRpgStatus(text) {
 //260523 Red 同步 RPG 状态栏显示
 function updateRpgStatusBar() {
   const s = state.rpgStatus;
+  const social = state.jrpgSocial;
   const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
   set("rpg-hp-val", s.hp);   set("rpg-hp-max", s.hpMax);
   set("rpg-mp-val", s.mp);   set("rpg-mp-max", s.mpMax);
   set("rpg-lv", s.lv);
   set("rpg-exp-val", s.exp); set("rpg-exp-next", s.expNext);
   set("rpg-gold", s.gold);
+  // 社交属性
+  set("rpg-social-virtue", social.德行);
+  set("rpg-social-intel", social.智识);
+  set("rpg-social-body", social.体魄);
+  set("rpg-social-charm", social.魅力);
   const nameTag = $("rpg-char-name-tag");
   if (nameTag) nameTag.textContent = state.rpgChar.name ? `⚔ ${state.rpgChar.name}` : "";
 }
@@ -2295,13 +2342,40 @@ function renderRpgChapter(content, bubble, text) {
   const cleanText = parseRpgStatus(text);
   const { mainText, choices } = parseContentBlocks(cleanText);
   renderMarkdownBubble(bubble, mainText);
+  // 解析JRPG好感度变化
+  const favResults = parseJrpgFav(cleanText);
+  // 如果有好感度变化，显示浮动提示
+  favResults.forEach(r => {
+    showToast(`${r.name} 好感度 ${r.delta > 0 ? '+' : ''}${r.delta}（${r.stage}）`);
+  });
+  // 从正文中提取敌人属性（用于战斗选项提示）
+  const enemyElementMatch = mainText.match(/属性[：:]\s*(\S+)/);
+  const enemyElement = enemyElementMatch ? enemyElementMatch[1] : null;
   if (choices.length > 0) {
     const choicesDiv = document.createElement("div");
     choicesDiv.className = "novel-choices";
     choices.forEach(c => {
       const btn = document.createElement("button");
       btn.className = "novel-choice-btn";
-      btn.appendChild(document.createTextNode(c.text));
+      // 如果是战斗选项且有敌人属性，显示克制提示
+      let hintText = c.text;
+      if (c.type === "combat" && enemyElement) {
+        const playerElement = state.jrpgNpcs[0]?.element || "fire";
+        const chart = JRPG_TYPE_CHART[playerElement];
+        if (chart) {
+          const enemyKey = Object.keys(JRPG_TYPE_CHART).find(k => JRPG_TYPE_CHART[k].name === enemyElement);
+          if (enemyKey) {
+            if (chart.strong.includes(enemyKey)) {
+              hintText = `🟢 ${c.text}`;
+              btn.title = "效果拔群！（2倍伤害）";
+            } else if (chart.weak.includes(enemyKey)) {
+              hintText = `🔴 ${c.text}`;
+              btn.title = "效果不好（0.5倍伤害）";
+            }
+          }
+        }
+      }
+      btn.appendChild(document.createTextNode(hintText));
       btn.onclick = () => {
         choicesDiv.querySelectorAll(".novel-choice-btn").forEach(b => b.disabled = true);
         btn.classList.add("selected");
@@ -2315,28 +2389,209 @@ function renderRpgChapter(content, bubble, text) {
   }
 }
 
-//260523 Red RPG 系统提示词构建（P5 框架：DM 视角，双轨玩法）
-function buildRpgSystemPrompt() {
+// ─── JRPG 模式 ──────────────────────────────────────────────────────────────
+// 属性克制表
+const JRPG_TYPE_CHART = {
+  fire:   { name: "火", emoji: "🔥", strong: ["ice", "wood"],        weak: ["water", "ground"] },
+  water:  { name: "水", emoji: "💧", strong: ["fire", "ground"],     weak: ["thunder", "ice", "wood"] },
+  ground: { name: "地", emoji: "🌍", strong: ["thunder", "fire"],    weak: ["water", "wind", "wood"] },
+  wind:   { name: "风", emoji: "🌪", strong: ["ground", "wood"],     weak: ["ice", "thunder"] },
+  ice:    { name: "冰", emoji: "❄️", strong: ["wind", "water", "wood"], weak: ["fire"] },
+  thunder:{ name: "雷", emoji: "⚡", strong: ["water", "wind"],      weak: ["ground"] },
+  wood:   { name: "木", emoji: "🌳", strong: ["water", "ground"],    weak: ["fire", "ice", "wind"] },
+  light:  { name: "光", emoji: "✨", strong: ["dark"],               weak: ["dark"] },
+  dark:   { name: "暗", emoji: "🌑", strong: ["light"],              weak: ["light"] },
+  omni:   { name: "全", emoji: "💫", strong: [],                     weak: [] }
+};
+
+// 随机名字生成器
+const JRPG_SURNAMES = ["陈","李","王","张","刘","杨","赵","黄","周","吴","徐","孙","马","朱","胡","林","郭","何","高","罗"];
+const JRPG_GIVEN_NAMES = ["思雨","晓萌","月琪","灵","可欣","子涵","雨萱","诗涵","欣怡","紫萱","梦琪","雅琴","若兰","静怡","思琪","佳怡","雪珊","美玲","小燕","丽华"];
+
+// 随机生成一个NPC
+function generateRandomNpc() {
+  const surname = JRPG_SURNAMES[Math.floor(Math.random() * JRPG_SURNAMES.length)];
+  const given = JRPG_GIVEN_NAMES[Math.floor(Math.random() * JRPG_GIVEN_NAMES.length)];
+  const names = ["同班同学","邻班同学","学姐","学妹","学生会成员","社团同伴","图书馆偶遇","便利店店员","实习老师"];
+  const personalities = ["开朗","内向","温柔","傲娇","冷淡","活泼","文静","直爽","毒舌","天然呆","认真","随性"];
+  const appearances = ["长发及腰","短发齐耳","双马尾","单马尾","披肩发","波浪卷","齐刘海","空气刘海","银色长发","黑色长发"];
+  const bodies = ["纤细","匀称","健美","娇小","高挑","丰满","苗条","运动型"];
+  const likes = ["读书","音乐","运动","游戏","动漫","摄影","绘画","烹饪","旅行","天文"];
+
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+  const pCount = 2 + Math.floor(Math.random() * 2);
+  const personality = Array.from({length: pCount}, () => pick(personalities)).filter((v,i,a) => a.indexOf(v) === i).join("、");
+  const bust = ["A","B","B+","C","C+","D"][Math.floor(Math.random() * 6)];
+  const legLen = 90 + Math.floor(Math.random() * 25);
+
+  return {
+    name: surname + given,
+    role: pick(names),
+    personality,
+    appearance: pick(appearances) + "、" + ["清秀","精致","英气","可爱","冷艳"][Math.floor(Math.random()*5)],
+    body: `${pick(bodies)}、胸围${bust}、腿长${legLen}cm`,
+    likes: Array.from({length: 2}, () => pick(likes)).filter((v,i,a) => a.indexOf(v) === i).join("、"),
+    fav: 0,
+    stage: "陌生人",
+    avatar: "",
+    element: ["fire","water","ground","wind","ice","thunder","wood","light","dark"][Math.floor(Math.random()*9)]
+  };
+}
+
+// 初始化JRPG游戏：生成NPC列表
+function initJrpgGame(savedNpcNames = []) {
+  const tpl = (state.config.jrpg_templates || {})[state.jrpgTemplate] || {};
+  const pool = tpl.npc_pool || [];
+  const saved = state.config.jrpg_npc_library || {};
+  let npcs = [];
+
+  // 先加入用户保存的NPC
+  for (const name of savedNpcNames) {
+    if (saved[name]) npcs.push({ ...saved[name], fav: 0, stage: "陌生人" });
+  }
+
+  // 从预置池和随机生成补齐到5个
+  const poolCopy = [...pool];
+  while (npcs.length < 5) {
+    if (poolCopy.length > 0) {
+      const idx = Math.floor(Math.random() * poolCopy.length);
+      const npc = poolCopy.splice(idx, 1)[0];
+      npcs.push({ ...npc, fav: 0, stage: "陌生人", avatar: "" });
+    } else {
+      npcs.push(generateRandomNpc());
+    }
+  }
+
+  state.jrpgNpcs = npcs;
+  return npcs;
+}
+
+// 好感度阶段判定
+function jrpgFavStage(fav) {
+  const stages = [
+    { name: "陌生人", cap: 20 },
+    { name: "朋友",   cap: 50 },
+    { name: "暧昧",   cap: 80 },
+    { name: "恋人",   cap: 100 }
+  ];
+  for (const s of stages) {
+    if (fav <= s.cap) return s.name;
+  }
+  return "恋人";
+}
+
+// 好感度变化（含魅力倍率）
+function applyJrpgFavDelta(npcName, delta) {
+  const npc = state.jrpgNpcs.find(n => n.name === npcName);
+  if (!npc) return;
+  const charmMultiplier = 1 + (state.jrpgSocial.魅力 - 5) * 0.1; // 魅力5=1x, 每点+10%
+  const finalDelta = Math.round(delta * charmMultiplier);
+  npc.fav = Math.max(0, Math.min(100, npc.fav + finalDelta));
+  npc.stage = jrpgFavStage(npc.fav);
+}
+
+// 保存NPC到角色库
+function saveJrpgNpcToLibrary(npc) {
+  const library = { ...(state.config.jrpg_npc_library || {}) };
+  library[npc.name] = { ...npc };
+  delete library[npc.name].fav;
+  delete library[npc.name].stage;
+  state.config.jrpg_npc_library = library;
+  postConfig({ jrpg_npc_library: library });
+}
+
+// 从角色库删除NPC
+function deleteJrpgNpcFromLibrary(name) {
+  const library = { ...(state.config.jrpg_npc_library || {}) };
+  delete library[name];
+  state.config.jrpg_npc_library = library;
+  postConfig({ jrpg_npc_library: library });
+}
+
+// 渲染NPC关系面板
+function renderJrpgNpcPanel() {
+  const list = $("jrpg-npc-list");
+  if (!list) return;
+  list.innerHTML = "";
+  if (state.jrpgNpcs.length === 0) {
+    list.innerHTML = '<div style="font-size:11px;color:var(--text-secondary)">尚未开始游戏</div>';
+    return;
+  }
+  state.jrpgNpcs.forEach(npc => {
+    const item = document.createElement("div");
+    item.className = "jrpg-npc-item";
+    const color = charColor(npc.name);
+    item.innerHTML = `
+      <div class="jrpg-npc-avatar" style="background:${color}">${npc.name.charAt(0)}</div>
+      <div class="jrpg-npc-info">
+        <div class="jrpg-npc-name">${npc.name}</div>
+        <div class="jrpg-npc-role">${npc.role}</div>
+      </div>
+      <div class="jrpg-npc-fav">
+        <div class="jrpg-npc-fav-track"><div class="jrpg-npc-fav-fill" style="width:${npc.fav}%"></div></div>
+        <span class="jrpg-npc-stage">${npc.stage} ${npc.fav}</span>
+      </div>
+      <button class="jrpg-npc-save-btn" title="保存到角色库">💾</button>
+    `;
+    item.querySelector(".jrpg-npc-save-btn").addEventListener("click", () => {
+      saveJrpgNpcToLibrary(npc);
+      showToast(`${npc.name} 已保存到角色库`);
+    });
+    list.appendChild(item);
+  });
+}
+
+// 构建JRPG系统提示词
+function buildJrpgSystemPrompt() {
+  const tpl = (state.config.jrpg_templates || {})[state.jrpgTemplate] || {};
   const c = state.rpgChar;
   const s = state.rpgStatus;
-  const world = (state.rpgWorldDir || "").trim();
+  const social = state.jrpgSocial;
+  const npcs = state.jrpgNpcs;
 
   const charLines = [
-    c.name        && `姓名：${c.name}`,
-    c.class       && `职业：${c.class}`,
-    c.background  && `背景：${c.background}`,
+    c.name && `姓名：${c.name}`,
+    c.class && `职业：${c.class}`,
+    c.background && `背景：${c.background}`,
     `战斗属性——力量${c.str} 敏捷${c.agi} 智力${c.int} 体质${c.vit}`,
-    `社交属性——知识${c.knowledge} 魅力${c.charm} 胆识${c.guts} 亲切${c.kindness} 手艺${c.craft}`,
+    `社交属性——德行${social.德行} 智识${social.智识} 体魄${social.体魄} 魅力${social.魅力}`,
   ].filter(Boolean).join("\n");
 
   const statusLine = `HP:${s.hp}/${s.hpMax}  MP:${s.mp}/${s.mpMax}  Lv.${s.lv}  EXP:${s.exp}/${s.expNext}  GOLD:${s.gold}`;
 
-  return `你是一部文字 RPG 游戏的 DM（地下城主），负责生成整个游戏世界和所有 NPC、怪物、事件。玩家扮演以下角色：
+  // NPC列表
+  const npcLines = npcs.map(n =>
+    `【${n.name}】${n.role}｜${n.personality}｜${n.appearance}｜${n.body}｜爱好：${n.likes}｜属性：${JRPG_TYPE_CHART[n.element]?.emoji || "?"}${JRPG_TYPE_CHART[n.element]?.name || n.element}`
+  ).join("\n");
+
+  // 属性克制表
+  const typeLines = Object.entries(JRPG_TYPE_CHART)
+    .filter(([k]) => k !== "omni")
+    .map(([k, v]) => `${v.emoji}${v.name}克${v.strong.map(s => JRPG_TYPE_CHART[s]?.name).join("、")}｜被${v.weak.map(w => JRPG_TYPE_CHART[w]?.emoji + JRPG_TYPE_CHART[w]?.name).join("、")}克`)
+    .join("\n");
+
+  const world = tpl.world_desc || (state.rpgWorldDir || "").trim();
+  const manualExtra = state.currentSystemPrompt.trim();
+
+  return `你是一部 JRPG 文字冒险游戏的 DM（地下城主），负责生成整个游戏世界和所有 NPC、怪物、事件。玩家扮演以下角色：
 
 【玩家角色】
 ${charLines}
 
-${world ? `【世界设定】\n${world}\n` : ""}【输出格式（每次严格遵守）】
+${world ? `【世界设定】\n${world}\n` : ""}【主要角色（5位女角色，玩家可发展感情线）】
+${npcLines}
+
+【属性克制表】
+${typeLines}
+效果倍率：克制=2倍伤害，普通=1倍，被克制=0.5倍
+
+【社交属性效果】
+德行${social.德行}：影响NPC信任度和队伍管理选项
+智识${social.智识}：影响解谜和知识型对话选项
+体魄${social.体魄}：影响物理挑战和战斗选项
+魅力${social.魅力}：直接影响好感度获取倍率（当前${(1 + (social.魅力 - 5) * 0.1).toFixed(1)}倍）
+
+【输出格式（每次严格遵守）】
 第一行：【场景标题】
 第二行：📍地点 · 🕐时间 · 天气
 空一行，正文约200字，第二人称叙事，描述世界和当前事件。
@@ -2353,7 +2608,12 @@ D|{类型}|选项文本
 [/CHOICES]
 
 选项类型参考：战斗/技能/探索/对话/逃跑/休息
-选项解锁条件受社交属性约束（如魅力<3则不显示魅力型选项）
+选项解锁条件受社交属性约束（如智识<3则不显示解谜型选项）
+
+【好感度更新格式】
+每轮对话末尾必须输出：
+[FAV:NPC名±数值]（原因简述）
+示例：[FAV:陈思雨+2]（帮她捡起了掉落的书本）
 
 【当前状态】
 ${statusLine}
@@ -2362,8 +2622,11 @@ ${statusLine}
 - HP归零时进入濒死状态，给出最后一次救场机会
 - 战斗胜利/探索发现给 EXP，EXP满升级，HP和MP上限提升
 - 每次更新后在 [STATUS] 中同步最新数值
-- 怪物、NPC、物品、地点全部随机生成，风格契合世界设定
-- 双轨叙事：白天/城镇可触发 NPC 社交（好感系统），夜晚/野外触发战斗探索`;
+- 属性克制关系：克制2倍伤害，被克制0.5倍伤害
+- 白天校园可触发NPC社交（好感系统），夜晚进入心之世界战斗探索
+- 与NPC互动时，根据当前好感度阶段调整互动尺度
+- 魅力属性越高，好感度获取越多（魅力5=1倍，每点+10%）
+${manualExtra ? `\n【玩家自定义指令】\n${manualExtra}` : ""}`;
 }
 
 function buildChatSystemPrompt() {
@@ -2903,17 +3166,25 @@ function setupEventListeners() {
 
   //#260522 Red 故事模式：角色卡选择 + 面板事件
   //260523 Red RPG 角色创建面板
+  // JRPG NPC 关系面板开关
+  $("jrpg-npc-toggle").addEventListener("click", () => {
+    const panel = $("jrpg-npc-panel");
+    panel.classList.toggle("hidden");
+    if (!panel.classList.contains("hidden")) renderJrpgNpcPanel();
+  });
   $("rpg-setup-btn").addEventListener("click", () => {
     const c = state.rpgChar;
+    const social = state.jrpgSocial;
     $("rpg-world-dir").value   = state.rpgWorldDir;
     $("rpg-char-name").value   = c.name;
     $("rpg-char-class").value  = c.class || "";
     $("rpg-char-bg").value     = c.background;
     $("rpg-str").value = c.str; $("rpg-agi").value = c.agi;
     $("rpg-int").value = c.int; $("rpg-vit").value = c.vit;
-    $("rpg-knowledge").value = c.knowledge; $("rpg-charm").value = c.charm;
-    $("rpg-guts").value = c.guts; $("rpg-kindness").value = c.kindness;
-    $("rpg-craft").value = c.craft;
+    $("rpg-virtue").value = social.德行;
+    $("rpg-intel").value  = social.智识;
+    $("rpg-body").value   = social.体魄;
+    $("rpg-charm").value  = social.魅力;
     $("rpg-setup-overlay").classList.add("open");
   });
   $("rpg-setup-cancel").addEventListener("click", () => $("rpg-setup-overlay").classList.remove("open"));
@@ -2926,11 +3197,13 @@ function setupEventListeners() {
       background: $("rpg-char-bg").value.trim(),
       str: gi("rpg-str"), agi: gi("rpg-agi"),
       int: gi("rpg-int"), vit: gi("rpg-vit"),
-      knowledge: parseInt($("rpg-knowledge").value)||1,
-      charm:     parseInt($("rpg-charm").value)||1,
-      guts:      parseInt($("rpg-guts").value)||1,
-      kindness:  parseInt($("rpg-kindness").value)||1,
-      craft:     parseInt($("rpg-craft").value)||1,
+    };
+    // 新社交属性：德智体美
+    state.jrpgSocial = {
+      德行: parseInt($("rpg-virtue").value)||5,
+      智识: parseInt($("rpg-intel").value)||5,
+      体魄: parseInt($("rpg-body").value)||5,
+      魅力: parseInt($("rpg-charm").value)||5,
     };
     // 根据体质计算初始 HP/MP
     state.rpgStatus = {
@@ -2940,6 +3213,8 @@ function setupEventListeners() {
       mpMax: 30 + state.rpgChar.int * 2,
       lv: 1, exp: 0, expNext: 100, gold: 50
     };
+    // 初始化JRPG NPC列表
+    initJrpgGame();
     updateRpgStatusBar();
     $("rpg-setup-overlay").classList.remove("open");
   });
