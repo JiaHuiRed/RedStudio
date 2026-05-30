@@ -298,11 +298,7 @@ const state = {
   //260523 Red 作者注记
   authorNote:      "",  // 注入 context 靠后位置的临时指令
   authorNoteDepth: 3,   // 插入深度：距末尾消息条数
-  //260523 Red 小说模式好感度系统
-  novelFav:       0,        // 当前好感度 0-100
-  novelFavEnabled: true,    // 好感度开关
-  novelStage:     "陌生人", // 当前阶段
-  //260523 Red 完全自定义阶段：[{name, cap}]，cap 为该阶段好感上限，最后一段固定 100
+  //260530 Red novelStages 保留，供新故事设定面板 UI 读写
   novelStages: [
     { name: "陌生人", cap: 20, rule: "保持礼貌距离，禁止任何肢体接触、暧昧动作和亲密话语" },
     { name: "相识",   cap: 45, rule: "可有日常接触（握手、碰肩），限于普通朋友范畴，禁止暧昧" },
@@ -383,7 +379,6 @@ async function init() {
   }
 
   setupEventListeners();
-  updateNovelFavBar();
   updateRpgStatusBar();
   updateNovelHeroineTag();
   renderPresets();
@@ -567,8 +562,6 @@ function streamReply(model) {
     : [...state.messages];
   //260523 Red 注入作者注记：插在距末尾 depth 条位置，AI 对靠近当前输入的内容注意力更高
   let apiMessages = injectAuthorNote(baseMessages);
-  //260525 Red 小说模式：每轮注入状态提醒（好感度+阶段+行为边界），紧邻当前输入之前
-  if (state.mode === "novel") apiMessages = injectNovelTurnReminder(apiMessages);
 
   bridge.sendChat(JSON.stringify({
     provider:          state.provider,
@@ -671,8 +664,11 @@ function onChatDone() {
   //#260522 Red 小说模式：解析章回内容，渲染章回分隔线 + 选项按钮
   if (state.mode === "novel" && ctx.fullContent) {
     renderNovelChapter(content, bubble, ctx.fullContent);
-    //260525 Red 格式校验：[CHOICES] 缺失时显示内联警告
-    if (!/\[CHOICES\]/i.test(ctx.fullContent)) {
+    //260530 Red 格式校验：无选项时显示内联警告（支持 [CHOICES]、A-D、1-4 格式）
+    const hasChoices = /\[CHOICES\]/i.test(ctx.fullContent)
+      || /^[A-Da-d][.、．]\s/m.test(ctx.fullContent)
+      || /^[1-4][.、．]\s/m.test(ctx.fullContent);
+    if (!hasChoices) {
       const warn = document.createElement("div");
       warn.className = "novel-format-warn";
       warn.textContent = "本轮未生成选项，可自由输入继续剧情，或点击重新生成";
@@ -875,8 +871,6 @@ function switchMode(mode, save = true) {
   const bar   = $("sys-prompt-bar");
   const input = $("sys-prompt-input");
   if (bar)   bar.classList.toggle("novel-mode", mode === "novel");
-  const novelStatusBar = $("novel-status-bar");
-  if (novelStatusBar) novelStatusBar.classList.toggle("hidden", mode !== "novel");
   const rpgStatusBar = $("rpg-status-bar");
   if (rpgStatusBar) rpgStatusBar.classList.toggle("hidden", mode !== "rpg");
   if (input) input.placeholder = mode === "novel"
@@ -1178,7 +1172,6 @@ function newChat() {
   $("sys-prompt-input").value = "";
   $("sys-prompt-bar").classList.remove("open");
   state.authorNote = "";
-  state.novelFavEnabled = true;
   $("author-note-input").value = "";
   $("author-note-bar").classList.remove("open", "active");
   // 重置JRPG状态
@@ -1208,9 +1201,6 @@ function saveChatHistory() {
     existing.sessionTokens     = { ...state.sessionTokens };
     existing.novelHeroine      = state.novelHeroine;
     existing.storyCharCardName = state.storyCharCardName;
-    existing.novelFav          = state.novelFav;
-    existing.novelStage        = state.novelStage;
-    existing.novelStages       = state.novelStages.map(s => ({ ...s }));
     existing.novelWordCount    = state.novelWordCount;
     existing.novelPov          = state.novelPov;
     existing.novelFavEnabled   = state.novelFavEnabled;
@@ -1238,12 +1228,8 @@ function saveChatHistory() {
       sessionTokens:     { ...state.sessionTokens },
       novelHeroine:      state.novelHeroine,
       storyCharCardName: state.storyCharCardName,
-      novelFav:          state.novelFav,
-      novelStage:        state.novelStage,
-      novelStages:       state.novelStages.map(s => ({ ...s })),
       novelWordCount:    state.novelWordCount,
       novelPov:          state.novelPov,
-      novelFavEnabled:   state.novelFavEnabled,
       novelStoryDir:     state.novelStoryDir,
       authorNote:        state.authorNote,
       authorNoteDepth:   state.authorNoteDepth,
@@ -1302,12 +1288,27 @@ function renderHistory() {
     renameBtn.textContent = "✎";
     renameBtn.addEventListener("click", e => {
       e.stopPropagation();
-      const newTitle = prompt("重命名对话：", chat.title);
-      if (newTitle && newTitle.trim() && newTitle.trim() !== chat.title) {
-        chat.title = newTitle.trim();
-        bridge.saveHistory(JSON.stringify(state.chatHistory.slice(0, 30)));
-        renderHistory();
-      }
+      //260530 Red 自定义重命名弹窗替代 window.prompt
+      const overlay = $("rename-overlay");
+      const input = $("rename-input");
+      input.value = chat.title;
+      overlay.classList.remove("hidden");
+      input.focus();
+      input.select();
+      const confirm = () => {
+        const newTitle = input.value.trim();
+        if (newTitle && newTitle !== chat.title) {
+          chat.title = newTitle;
+          bridge.saveHistory(JSON.stringify(state.chatHistory.slice(0, 30)));
+          renderHistory();
+        }
+        overlay.classList.add("hidden");
+      };
+      const cancel = () => overlay.classList.add("hidden");
+      $("rename-confirm").onclick = confirm;
+      $("rename-cancel").onclick = cancel;
+      $("rename-close").onclick = cancel;
+      input.onkeydown = ev => { if (ev.key === "Enter") confirm(); if (ev.key === "Escape") cancel(); };
     });
     item.appendChild(renameBtn);
     const delBtn = document.createElement("button");
@@ -1334,17 +1335,6 @@ function loadChat(chat) {
   //#260522 Red 恢复小说模式女明星选择 + 故事模式角色卡选择
   state.novelHeroine        = chat.novelHeroine      || "";
   state.storyCharCardName   = chat.storyCharCardName || "";
-  //260523 Red 恢复好感度系统状态
-  state.novelFav            = chat.novelFav          ?? 10;
-  state.novelStages = Array.isArray(chat.novelStages) && chat.novelStages[0]?.cap
-    ? chat.novelStages.map(s => ({ ...s }))
-    : [ { name:"陌生人",cap:20, rule:"保持礼貌距离，禁止任何肢体接触、暧昧动作和亲密话语" },
-        { name:"相识",  cap:45, rule:"可有日常接触（握手、碰肩），限于普通朋友范畴，禁止暧昧" },
-        { name:"朋友",  cap:70, rule:"友好亲近，可自然接触，禁止任何暧昧行为和亲密描写" },
-        { name:"暧昧",  cap:90, rule:"可有明显暧昧互动（牵手、对视），禁止成人向描写" },
-        { name:"恋人",  cap:100, rule:"可有亲密表达，视剧情自然推进，禁止无铺垫的成人向内容" } ];
-  state.novelStage          = chat.novelStage        || novelFavStage(state.novelFav);
-  state.novelFavEnabled     = chat.novelFavEnabled   !== false;
   state.novelWordCount      = chat.novelWordCount    || 200;
   state.novelPov            = chat.novelPov          || "second";
   state.novelHeroName       = chat.novelHeroName     || "林然";
@@ -1362,7 +1352,6 @@ function loadChat(chat) {
   state.jrpgNpcs            = Array.isArray(chat.jrpgNpcs) ? chat.jrpgNpcs : [];
   state.jrpgSocial          = chat.jrpgSocial || { 德行: 5, 智识: 5, 体魄: 5, 魅力: 5 };
   updateRpgStatusBar();
-  updateNovelFavBar();
   updateNovelHeroineTag();
   $("author-note-input").value = state.authorNote;
   $("author-note-depth").value = state.authorNoteDepth;
@@ -1844,45 +1833,6 @@ function injectAuthorNote(messages) {
   return msgs;
 }
 
-//260525 Red 小说模式每轮状态提醒：好感度+阶段+行为边界，插在最后一条消息之前
-function buildNovelTurnReminder() {
-  if (!state.novelFavEnabled) return "";  // 好感度关闭时跳过
-  const fav    = state.novelFav;
-  const stage  = state.novelStage;
-  const stages = state.novelStages;
-  const idx    = stages.findIndex(s => s.name === stage);
-  const cur    = stages[Math.min(Math.max(idx, 0), stages.length - 1)];
-  const behavior = cur?.rule || "遵守当前阶段的行为边界";
-  const maxFav = novelFavMax();
-  return `【本轮好感度核验】
-好感度：${fav}/${maxFav} · 当前阶段：${stage}
-当前阶段行为规则：${behavior}
-禁止超越当前阶段的亲密行为。`;
-}
-
-function injectNovelTurnReminder(messages) {
-  const reminder = buildNovelTurnReminder();
-  if (!reminder) return messages;
-  const msgs = [...messages];
-  const insertPos = Math.max(0, msgs.length - 1);
-  msgs.splice(insertPos, 0, { role: "system", content: reminder });
-  return msgs;
-}
-
-// 好感度最大上限（取最后一段的 cap）
-function novelFavMax() {
-  const stages = state.novelStages;
-  return stages.length > 0 ? stages[stages.length - 1].cap : 100;
-}
-
-//260523 Red 好感度阶段映射（按 cap 阈值查找，支持自定义数量）
-function novelFavStage(fav) {
-  for (const s of state.novelStages) {
-    if (fav <= s.cap) return s.name;
-  }
-  return state.novelStages[state.novelStages.length - 1]?.name || "恋人";
-}
-
 // 渲染好感阶段表格（动态行数）
 function renderNovelStages() {
   const table = $("ns-stages-table");
@@ -1913,49 +1863,11 @@ function renderNovelStages() {
   });
 }
 
-//260523 Red 应用好感度变化，更新状态栏
-function applyNovelFavDelta(delta) {
-  if (delta === 0) return;
-  const prevStage = state.novelStage;
-  const max = novelFavMax();
-  state.novelFav = Math.max(0, Math.min(max, state.novelFav + delta));
-  state.novelStage = novelFavStage(state.novelFav);
-  updateNovelFavBar();
-  showNovelFavFloat(delta);
-  if (state.novelStage !== prevStage) {
-    showNovelStageToast(state.novelStage);
-  }
-}
-
-//260526 Red 好感度变化浮动动画
-function showNovelFavFloat(delta) {
-  const bar = $("novel-status-bar");
-  if (!bar) return;
-  const el = document.createElement("span");
-  el.className = "novel-fav-float" + (delta > 0 ? " pos" : " neg");
-  el.textContent = delta > 0 ? `+${delta}` : `${delta}`;
-  bar.appendChild(el);
-  requestAnimationFrame(() => el.classList.add("show"));
-  setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 400); }, 1200);
-}
-
-//260523 Red 同步状态栏显示
-function updateNovelFavBar() {
-  const fill    = $("novel-fav-fill");
-  const valEl   = $("novel-fav-value");
-  const stageEl = $("novel-stage-text");
-  const max     = novelFavMax();
-  const pct     = max > 0 ? (state.novelFav / max * 100) : 0;
-  if (fill)    fill.style.width = `${Math.min(pct, 100)}%`;
-  if (valEl)   valEl.textContent = `${state.novelFav}/${max}`;
-  if (stageEl) stageEl.textContent = state.novelStage;
-}
-
-//260523 Red 阶段升降提示（淡入淡出 toast）
-function showNovelStageToast(stage) {
+//260530 Red 通用 toast 通知（导入导出等场景，替代原好感度阶段提示）
+function showNovelStageToast(msg) {
   const toast = document.createElement("div");
   toast.className = "novel-stage-toast";
-  toast.textContent = `好感度阶段：${stage}`;
+  toast.textContent = msg;
   document.body.appendChild(toast);
   requestAnimationFrame(() => toast.classList.add("show"));
   setTimeout(() => {
@@ -2004,32 +1916,11 @@ function buildNovelSystemPrompt() {
     heroineCard = `【女主角设定 — ${heroine.name || state.novelHeroine}】\n${hLines.join("\n")}`;
   }
 
-  // 好感度轮次提醒（仅在开启时注入到当前轮）
-  let favPrompt = "";
-  if (state.novelFavEnabled) {
-    const fav       = state.novelFav;
-    const stage     = novelFavStage(fav);
-    const stages     = state.novelStages;
-    const stageIdx   = stages.findIndex(s => s.name === stage);
-    const cur        = stages[Math.min(Math.max(stageIdx, 0), stages.length - 1)];
-    const behaviorRule = cur?.rule || "遵守当前阶段的行为边界";
-    const stageTableLines = stages.map((s, i) => {
-      const lo = i === 0 ? 0 : stages[i - 1].cap + 1;
-      const hi = s.cap;
-      const behavior = s.rule || "遵守当前阶段的行为边界";
-      const mark = s.name === stage ? " ◀ 当前" : "";
-      return `${lo}-${hi} 【${s.name}】：${behavior}${mark}`;
-    }).join("\n");
-    const maxFav = novelFavMax();
-    favPrompt = `当前好感度：${fav}/${maxFav} · 阶段：${stage}
-${stageTableLines}
-当前阶段规则：${behaviorRule}`;
-  }
-
   // 用户在系统提示词栏手动输入的内容
   const manualExtra = state.currentSystemPrompt.trim();
 
-  return [templateContent, heroineCard, favPrompt ? `【好感度与行为边界】\n${favPrompt}` : "", manualExtra].filter(Boolean).join("\n\n");
+  //260530 Red 不再注入好感度阶段规则（favPrompt 已移除），由用户提示词自行定义
+  return [templateContent, heroineCard, manualExtra].filter(Boolean).join("\n\n");
 }
 
 // 解析 AI 回复：提取正文、[CHOICES] 块（含好感变化/类型）、[FAV:N] 标签
@@ -2067,13 +1958,14 @@ function parseContentBlocks(text) {
     mainText = mainText.replace(favMatch[0], "").trim();
   }
 
-  // 兼容旧格式：1. 2. 3. 4. 编号选项
+  //260530 Red 选项解析兼容 A. B. C. D. 和 1. 2. 3. 4. 编号格式
   if (choices.length === 0) {
     const lines = mainText.split("\n");
     const idx = new Set();
     for (let i = 0; i < lines.length; i++) {
-      const m = lines[i].match(/^([1-4])[.、．]\s*(.+)$/);
-      if (m) { choices.push({ label: m[1], delta: 0, type: null, text: m[2].trim() }); idx.add(i); }
+      const m = lines[i].match(/^([A-Da-d])[.、．]\s*(.+)$/)
+             || lines[i].match(/^([1-4])[.、．]\s*(.+)$/);
+      if (m) { choices.push({ label: m[1].toUpperCase(), delta: 0, type: null, text: m[2].trim() }); idx.add(i); }
     }
     if (choices.length >= 2) {
       mainText = lines.filter((_, i) => !idx.has(i)).join("\n").trimEnd();
@@ -2109,14 +2001,11 @@ function parseJrpgFav(text) {
   return results;
 }
 
-//260523 Red 小说章回渲染：正文走 Markdown，选项变按钮（含好感变化徽章）
+//260523 Red 小说章回渲染：正文走 Markdown，选项变按钮
 function renderNovelChapter(content, bubble, text) {
-  const { mainText, choices, favDelta } = parseContentBlocks(text);
+  const { mainText, choices } = parseContentBlocks(text);
 
   renderMarkdownBubble(bubble, mainText);
-
-  // 自由输入时应用 AI 给出的好感变化
-  if (favDelta !== 0) applyNovelFavDelta(favDelta);
 
   if (choices.length > 0) {
     const choicesDiv = document.createElement("div");
@@ -2133,7 +2022,6 @@ function renderNovelChapter(content, bubble, text) {
       btn.appendChild(document.createTextNode(c.text));
 
       btn.onclick = () => {
-        applyNovelFavDelta(c.delta);
         choicesDiv.querySelectorAll(".novel-choice-btn").forEach(b => b.disabled = true);
         btn.classList.add("selected");
         userInputEl.value = c.text;
@@ -3271,8 +3159,6 @@ function setupEventListeners() {
     state.novelStoryDir    = $("ns-story-dir").value.trim();
     state.novelPov         = $("ns-pov").value;
     state.novelWordCount   = parseInt($("ns-word-count").value) || 200;
-    state.novelFavEnabled  = $("ns-fav-enabled").checked;
-    state.novelFav         = parseInt($("ns-start-fav").value) || 0;
     // 从动态表格读取阶段
     const stageRows = [...document.querySelectorAll("#ns-stages-table .ns-stage-row")];
     const defaultStages = [
@@ -3293,8 +3179,6 @@ function setupEventListeners() {
       if (state.novelStages[i].cap <= state.novelStages[i-1].cap)
         state.novelStages[i].cap = state.novelStages[i-1].cap + 1;
     }
-    state.novelStage = novelFavStage(state.novelFav);
-    updateNovelFavBar();
     $("novel-setup-overlay").classList.remove("open");
 
     const heroine = (state.config.novel_heroines || {})[state.novelHeroine];

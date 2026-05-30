@@ -1,5 +1,5 @@
 # author Red
-# @project  Red Studio  3.6.0
+# @project  Red Studio  3.6.2
 # @since    2026-05-14
 # @updated  2026-05-25
 # 260521 Red QWebChannel 重构：移除 Flask HTTP 层，改用 Qt 直接桥接
@@ -348,57 +348,104 @@ class Bridge(QObject):
 
     def _mimo_speak(self, text: str, gen: int, voice_id: str, api_key: str):
         #260523 Red 小米 MiMo TTS：OpenAI 兼容接口，返回 base64 WAV，用 MCI 播放
-        import base64, os, tempfile, time
+        #260530 Red 长文本分段并行下载、顺序播放，避免单次请求超时
+        import base64, os, re, tempfile, time
         import requests as _req
+        from concurrent.futures import ThreadPoolExecutor, as_completed
         voice = voice_id or "冰糖"
-        tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-        tmp_path = tmp.name
-        tmp.close()
-        try:
-            resp = _req.post(
-                "https://api.xiaomimimo.com/v1/chat/completions",
-                headers={"api-key": api_key, "Content-Type": "application/json"},
-                json={
-                    "model": "mimo-v2.5-tts",
-                    "messages": [
-                        {"role": "assistant", "content": text}
-                    ],
-                    "audio": {"format": "wav", "voice": voice},
-                },
-                timeout=20,
-            )
-            if resp.status_code != 200:
-                self.ttsError.emit(f"MiMo TTS 错误 {resp.status_code}：{resp.text[:120]}")
-                return
-            data = resp.json()
-            audio_b64 = data["choices"][0]["message"]["audio"]["data"]
-            with open(tmp_path, "wb") as f:
-                f.write(base64.b64decode(audio_b64))
+        mci = ctypes.windll.winmm.mciSendStringW
+
+        # 按句末标点分段，每段不超过 300 字符
+        def _split(text, max_len=300):
+            sents = re.split(r'(?<=[。！？.!?\n])\s*', text)
+            chunks, cur = [], ""
+            for s in sents:
+                if len(cur) + len(s) > max_len and cur:
+                    chunks.append(cur)
+                    cur = s
+                else:
+                    cur += s
+            if cur.strip():
+                chunks.append(cur)
+            return chunks if chunks else [text]
+
+        # 下载单段音频，返回 (index, tmp_path) 或 (index, None)
+        def _download(idx, chunk):
             if gen != self._tts_generation[0]:
-                return
-            mci   = ctypes.windll.winmm.mciSendStringW
+                return idx, None
+            tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+            tmp_path = tmp.name
+            tmp.close()
+            try:
+                resp = _req.post(
+                    "https://api.xiaomimimo.com/v1/chat/completions",
+                    headers={"api-key": api_key, "Content-Type": "application/json"},
+                    json={
+                        "model": "mimo-v2.5-tts",
+                        "messages": [{"role": "assistant", "content": chunk}],
+                        "audio": {"format": "wav", "voice": voice},
+                    },
+                    timeout=60,
+                )
+                if resp.status_code != 200:
+                    os.unlink(tmp_path)
+                    return idx, None
+                data = resp.json()
+                audio_b64 = data["choices"][0]["message"]["audio"]["data"]
+                with open(tmp_path, "wb") as f:
+                    f.write(base64.b64decode(audio_b64))
+                return idx, tmp_path
+            except Exception:
+                try: os.unlink(tmp_path)
+                except Exception: pass
+                return idx, None
+
+        # 播放单段，返回是否被取消
+        def _play(tmp_path):
             alias = "rds_tts"
             mci(f'open "{tmp_path}" alias {alias}', None, 0, None)
             mci(f'play {alias}', None, 0, None)
             buf = ctypes.create_unicode_buffer(256)
+            cancelled = False
             while True:
                 if gen != self._tts_generation[0]:
                     mci(f'stop {alias}', None, 0, None)
+                    cancelled = True
                     break
                 mci(f'status {alias} mode', buf, 256, None)
                 if buf.value != 'playing':
                     break
                 time.sleep(0.05)
             mci(f'close {alias}', None, 0, None)
+            return cancelled
+
+        chunks = _split(text)
+        tmp_paths = [None] * len(chunks)
+        try:
+            # 并行下载所有分段
+            with ThreadPoolExecutor(max_workers=min(len(chunks), 5)) as pool:
+                futures = {pool.submit(_download, i, c): i for i, c in enumerate(chunks)}
+                for future in as_completed(futures):
+                    if gen != self._tts_generation[0]:
+                        break
+                    idx, path = future.result()
+                    tmp_paths[idx] = path
+
+            # 按顺序播放
+            for path in tmp_paths:
+                if gen != self._tts_generation[0] or not path:
+                    break
+                if _play(path):
+                    break
         except _req.exceptions.Timeout:
-            self.ttsError.emit("MiMo TTS 连接超时（20s），请检查网络或 API Key")
+            self.ttsError.emit("MiMo TTS 连接超时（60s），请检查网络或 API Key")
         except Exception as e:
             self.ttsError.emit(f"MiMo TTS 出错：{e}")
         finally:
-            try:
-                os.unlink(tmp_path)
-            except Exception:
-                pass
+            for p in tmp_paths:
+                if p:
+                    try: os.unlink(p)
+                    except Exception: pass
 
     def _tts_worker(self):
         """在独立线程中串行处理朗读请求；COM 对象必须在使用它的线程中创建"""
