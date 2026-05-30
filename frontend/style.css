@@ -271,8 +271,8 @@ body {
 #btn-minimize { background: #febc2e; box-shadow: 0 0 0 0.5px rgba(0,0,0,0.12); }
 #btn-maximize { background: #28c840; box-shadow: 0 0 0 0.5px rgba(0,0,0,0.12); }
 
-/* hover 时按钮整组略微变暗，不显示符号 */
-#traffic-lights:hover .tl { filter: brightness(0.82); }
+/* hover 时仅当前按钮变暗，不显示符号 */
+.tl:hover { filter: brightness(0.82); }
 
 /* ── 侧边栏折叠按钮 ────────────────────────────────────────── */
 /* 260522 Red 在交通灯右侧，垂直居中，鼠标悬停变色 */
