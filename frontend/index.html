@@ -111,6 +111,11 @@
     </div>
 
     <!-- 历史列表 -->
+    <div id="history-filter">
+      <button class="history-filter-btn active" data-filter="all">全部</button>
+      <button class="history-filter-btn" data-filter="rpg">JRPG</button>
+      <button class="history-filter-btn" data-filter="novel">小说</button>
+    </div>
     <div id="chat-history">
       <div class="history-section-label">历史对话</div>
     </div>
@@ -206,7 +211,13 @@
       <span class="rpg-stat" title="体魄">💪<strong id="rpg-social-body">5</strong></span>
       <span class="rpg-stat" title="魅力">💖<strong id="rpg-social-charm">5</strong></span>
       <span id="rpg-char-name-tag"></span>
+      <button id="jrpg-skill-toggle" class="rpg-stat-btn" title="技能管理">⚡技能</button>
       <button id="jrpg-npc-toggle" class="rpg-stat-btn" title="NPC 关系">👥</button>
+    </div>
+
+    <!-- JRPG 技能面板 -->
+    <div id="jrpg-skill-panel" class="hidden">
+      <div id="jrpg-skill-list"></div>
     </div>
 
     <!-- JRPG NPC 关系面板 -->

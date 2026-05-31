@@ -1810,6 +1810,46 @@ body[data-mode="novel"] #mode-section {
   transition: opacity 0.15s;
 }
 .rpg-stat-btn:hover { opacity: 1; }
+/*260601 Red 技能面板*/
+#jrpg-skill-panel {
+  padding: 6px 10px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--sidebar-border);
+  max-height: 200px;
+  overflow-y: auto;
+}
+#jrpg-skill-panel.hidden { display: none; }
+#jrpg-skill-list { display: flex; flex-direction: column; gap: 6px; }
+.jrpg-skill-section-title {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.jrpg-skill-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.jrpg-skill-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  border: 1px solid var(--input-border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+.jrpg-skill-chip.physical { border-left: 3px solid #e74c3c; }
+.jrpg-skill-chip.magic { border-left: 3px solid #3498db; }
+.jrpg-skill-chip.support { border-left: 3px solid #2ecc71; }
+.jrpg-skill-chip.forgotten { opacity: 0.5; border-left: 3px solid var(--text-tertiary); }
+.jrpg-skill-chip .skill-type {
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
 #jrpg-npc-panel {
   padding: 6px 10px;
   background: var(--bg-secondary);
@@ -2525,6 +2565,33 @@ body[data-mode="novel"] #mode-section {
   border-color: var(--accent);
   color: #fff;
   font-weight: 500;
+}
+
+/* ── 历史分类标签 ─────────────────────────────────────── */
+#history-filter {
+  display: flex;
+  gap: 4px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--sidebar-border);
+}
+.history-filter-btn {
+  padding: 2px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--input-border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.history-filter-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.history-filter-btn:hover:not(.active) {
+  background: var(--hover-bg);
 }
 
 /* ── 历史重命名 ─────────────────────────────────────────── */

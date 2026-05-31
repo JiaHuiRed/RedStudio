@@ -263,6 +263,7 @@ const state = {
   model: "",                // 当前选中的模型
   messages: [],             // 当前对话的消息列表 [{role, content}]
   chatHistory: [],          // 历史对话列表 [{id, title, provider, model, messages}]
+  historyFilter: "all",     //260601 Red 历史过滤：all/rpg/novel
   isStreaming: false,       // 是否正在生成
   streamCtx: null,          // 260521 Red 流式上下文（替代 AbortController 方案）
   config: {},               // 从服务器加载的配置
@@ -288,6 +289,8 @@ const state = {
     hp: 50, hpMax: 50, mp: 20, mpMax: 20,
     lv: 1, exp: 0, expNext: 100, gold: 50
   },
+  //260601 Red 技能系统：装备技能 + 遗忘技能
+  rpgSkills: { equipped: [], forgotten: [] },
   //260601 Red rpgWorldDir 已移除，模板固定为 P5R 风格
   // JRPG 模式状态
   jrpgNpcs: [],             // 当前游戏的NPC列表 [{name, role, personality, appearance, body, likes, fav, stage, avatar, element}]
@@ -561,6 +564,16 @@ function streamReply(model) {
     : [...state.messages];
   //260523 Red 注入作者注记：插在距末尾 depth 条位置，AI 对靠近当前输入的内容注意力更高
   let apiMessages = injectAuthorNote(baseMessages);
+  //260601 Red 战斗/技能回合自动注入完整技能库
+  if (state.mode === "rpg") {
+    const lastMsg = state.messages[state.messages.length - 1];
+    const userInput = (userInputEl?.value || "").trim();
+    const needSkills = (lastMsg?.role === "assistant" && /combat|战斗|技能库|学习新技能/i.test(lastMsg.content || ""))
+                    || /装备|学习|替换|遗忘|切换|更换|查看技能/i.test(userInput);
+    if (needSkills) {
+      apiMessages = injectCombatSkillTable(apiMessages);
+    }
+  }
 
   bridge.sendChat(JSON.stringify({
     provider:          state.provider,
@@ -691,7 +704,8 @@ function onChatDone() {
 
   //260523 Red RPG 模式：解析 [STATUS] 和 [CHOICES]，更新状态栏
   if (state.mode === "rpg" && ctx.fullContent) {
-    renderRpgChapter(content, bubble, ctx.fullContent);
+    try { renderRpgChapter(content, bubble, ctx.fullContent); }
+    catch(e) { console.error("renderRpgChapter error:", e); }
   }
 
   // 260514 Red 始终渲染 token 标注行
@@ -959,7 +973,8 @@ function appendMessage(role, content, msgIndex = -1) {
     //#260522 Red 历史消息重放：故事模式解析角色卡，小说模式解析选项
     if (state.mode === "rpg") {
       const charName = extractCharName(content);
-      const { mainText, choices } = parseContentBlocks(content);
+      const cleanText = parseRpgStatus(content);
+      const { mainText, choices } = parseContentBlocks(cleanText);
 
       const av = makeAvatar();
       if (charName) {
@@ -981,6 +996,7 @@ function appendMessage(role, content, msgIndex = -1) {
         choices.forEach(c => {
           const btn = document.createElement("button");
           btn.className = "novel-choice-btn";
+          btn.textContent = c.text;
           btn.onclick = () => {
             choicesDiv.querySelectorAll(".novel-choice-btn").forEach(b => b.disabled = true);
             btn.classList.add("selected");
@@ -1246,7 +1262,12 @@ function renderHistory() {
   const items = chatHistory.querySelectorAll(".history-item");
   items.forEach(el => el.remove());
 
-  state.chatHistory.slice(0, 30).forEach(chat => {
+  //260601 Red 按模式过滤历史
+  const filtered = state.chatHistory.filter(chat =>
+    state.historyFilter === "all" || chat.mode === state.historyFilter
+  );
+
+  filtered.slice(0, 30).forEach(chat => {
     const item = document.createElement("div");
     item.className = "history-item";
     item.dataset.id = chat.id;
@@ -1254,7 +1275,8 @@ function renderHistory() {
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
       </svg>
-      <span class="history-title">${escapeHtml(chat.title)}</span>`;
+      <span class="history-title">${escapeHtml(chat.title)}</span>
+      <span class="history-mode-tag" style="margin-left:auto;font-size:10px;opacity:0.5">${chat.mode === "rpg" ? "JRPG" : chat.mode === "novel" ? "小说" : ""}</span>`;
     const renameBtn = document.createElement("button");
     renameBtn.className = "history-rename-btn";
     renameBtn.title = "重命名";
@@ -1804,6 +1826,24 @@ function injectAuthorNote(messages) {
   return msgs;
 }
 
+//260601 Red 战斗回合注入完整技能库
+function injectCombatSkillTable(messages) {
+  const skillLines = Object.entries(JRPG_SKILLS.reduce((acc, sk) => {
+    if (!acc[sk.element]) acc[sk.element] = [];
+    acc[sk.element].push(sk);
+    return acc;
+  }, {})).map(([el, skills]) => {
+    const emoji = JRPG_TYPE_CHART[el]?.emoji || "?";
+    const name = JRPG_TYPE_CHART[el]?.name || el;
+    const byTier = [1,2,3,4].map(t => skills.filter(s => s.tier === t).map(s => `${s.name}(${s.type === "physical" ? "物" : s.type === "magic" ? "魔" : "辅"})`).join("、")).filter(Boolean);
+    return `${emoji}${name}：${byTier.join(" | ")}`;
+  }).join("\n");
+  const table = `【完整技能库（按需参考）】\n${skillLines}\n\n注意：当前仅可装备4个技能，需要更换技能时请通过选项提出。`;
+  const msgs = [...messages];
+  msgs.splice(msgs.length - 1, 0, { role: "system", content: table });
+  return msgs;
+}
+
 // 渲染好感阶段表格（动态行数）
 function renderNovelStages() {
   const table = $("ns-stages-table");
@@ -2187,6 +2227,7 @@ function updateRpgStatusBar() {
 //260523 Red RPG 章节渲染：解析 STATUS + CHOICES，正文走 Markdown，选项自动发送
 function renderRpgChapter(content, bubble, text) {
   const cleanText = parseRpgStatus(text);
+  parseRpgSkills(cleanText); //260601 Red 解析技能数据
   const { mainText, choices } = parseContentBlocks(cleanText);
   renderMarkdownBubble(bubble, mainText);
   // 解析JRPG好感度变化
@@ -2270,7 +2311,7 @@ function renderRpgChapter(content, bubble, text) {
           }
         }
       }
-      btn.appendChild(document.createTextNode(hintText));
+      btn.textContent = hintText;
       btn.onclick = () => {
         choicesDiv.querySelectorAll(".novel-choice-btn").forEach(b => b.disabled = true);
         btn.classList.add("selected");
@@ -2554,6 +2595,78 @@ const ELEMENT_COLOR = {
   ice:"#9b59b6", thunder:"#f1c40f", wood:"#27ae60", light:"#f5f5dc", dark:"#2c3e50"
 };
 
+//260601 Red 技能解析：从 AI 输出中提取 [SKILLS]...[/SKILLS]
+function parseRpgSkills(text) {
+  const m = text.match(/\[SKILLS\]([\s\S]*?)\[\/SKILLS\]/);
+  if (!m) return;
+  const lines = m[1].trim().split("\n").filter(Boolean);
+  const equipped = [];
+  const forgotten = [];
+  let section = "equipped";
+  for (const line of lines) {
+    if (line.includes("遗忘") || line.includes("forgotten")) { section = "forgotten"; continue; }
+    const parts = line.split("|").map(s => s.trim());
+    if (parts.length >= 2) {
+      const entry = { name: parts[0], element: parts[1], type: parts[2] || "magic", desc: parts[3] || "" };
+      if (section === "forgotten") forgotten.push(entry);
+      else equipped.push(entry);
+    }
+  }
+  state.rpgSkills = { equipped, forgotten };
+}
+
+//260601 Red 技能面板渲染
+function renderJrpgSkillPanel() {
+  const list = $("jrpg-skill-list");
+  if (!list) return;
+  const { equipped, forgotten } = state.rpgSkills;
+  list.innerHTML = "";
+  if (equipped.length === 0 && forgotten.length === 0) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--text-tertiary);padding:8px;text-align:center">尚未习得技能</div>';
+    return;
+  }
+  // 装备区
+  const eqTitle = document.createElement("div");
+  eqTitle.className = "jrpg-skill-section-title";
+  eqTitle.textContent = `已装备（${equipped.length}/4）`;
+  list.appendChild(eqTitle);
+  const eqGrid = document.createElement("div");
+  eqGrid.className = "jrpg-skill-grid";
+  equipped.forEach(sk => {
+    const chip = document.createElement("div");
+    chip.className = `jrpg-skill-chip ${sk.type}`;
+    const emoji = ELEMENT_EMOJI[sk.element] || "❓";
+    chip.innerHTML = `${emoji} ${sk.name} <span class="skill-type">${sk.type === "physical" ? "物" : sk.type === "magic" ? "魔" : "辅"}</span>`;
+    eqGrid.appendChild(chip);
+  });
+  for (let i = equipped.length; i < 4; i++) {
+    const empty = document.createElement("div");
+    empty.className = "jrpg-skill-chip";
+    empty.style.opacity = "0.3";
+    empty.textContent = "空";
+    eqGrid.appendChild(empty);
+  }
+  list.appendChild(eqGrid);
+  // 遗忘区
+  if (forgotten.length > 0) {
+    const fgTitle = document.createElement("div");
+    fgTitle.className = "jrpg-skill-section-title";
+    fgTitle.style.marginTop = "6px";
+    fgTitle.textContent = `已遗忘（${forgotten.length}）`;
+    list.appendChild(fgTitle);
+    const fgGrid = document.createElement("div");
+    fgGrid.className = "jrpg-skill-grid";
+    forgotten.forEach(sk => {
+      const chip = document.createElement("div");
+      chip.className = `jrpg-skill-chip forgotten`;
+      const emoji = ELEMENT_EMOJI[sk.element] || "❓";
+      chip.innerHTML = `${emoji} ${sk.name}`;
+      fgGrid.appendChild(chip);
+    });
+    list.appendChild(fgGrid);
+  }
+}
+
 function renderJrpgNpcPanel() {
   const list = $("jrpg-npc-list");
   if (!list) return;
@@ -2648,28 +2761,30 @@ ${charLines}
 ${world ? `【世界设定】\n${world}\n` : ""}【主要角色（5位女角色，玩家可发展感情线）】
 ${npcLines}
 
+【角色卡输出规则】
+当新的可攻略女角色（以上5位之一）首次在剧情中正式登场时，必须在正文之前输出角色卡，格式如下：
+【角色卡】
+姓名：xxx
+角色：xxx（身份定位）
+性格：xxx
+外貌：xxx
+身材：xxx
+爱好：xxx
+元素：xxx（火/水/地/风/冰/雷/木/光/暗）
+每个角色只输出一次角色卡，后续登场不再重复。
+
 【属性克制表】
 ${typeLines}
 效果倍率：克制=2倍伤害，普通=1倍，被克制=0.5倍
 
-【技能库（物理技能受力加成，魔法技能受魔加成，辅助技能无伤害）】
-${Object.entries(JRPG_SKILLS.reduce((acc, sk) => {
-  if (!acc[sk.element]) acc[sk.element] = [];
-  acc[sk.element].push(sk);
-  return acc;
-}, {})).map(([el, skills]) => {
-  const emoji = JRPG_TYPE_CHART[el]?.emoji || "?";
-  const name = JRPG_TYPE_CHART[el]?.name || el;
-  const byTier = [1,2,3,4].map(t => skills.filter(s => s.tier === t).map(s => `${s.name}(${s.type === "physical" ? "物" : s.type === "magic" ? "魔" : "辅"})`).join("、")).filter(Boolean);
-  return `${emoji}${name}：${byTier.join(" | ")}`;
-}).join("\n")}
-
-【技能管理规则】
+【技能系统】
+技能分物理（受力加成）、魔法（受魔加成）、辅助（无伤害）三类，每元素13个技能（5初级/4中级/3高级/1究极）。
 - 玩家最多装备4个技能，可在战斗中自由切换
 - 升级或剧情事件时可从技能库学习新技能
 - 超出4个时必须替换一个，被替换的技能进入遗忘列表
 - 遗忘列表中的技能可随时找回
 - NPC也有各自的元素属性和技能，由你根据角色定位分配
+- 战斗中会提供完整的技能库列表供参考
 
 【社交属性效果】
 德行${social.德行}：影响NPC信任度和队伍管理选项
@@ -2680,11 +2795,21 @@ ${Object.entries(JRPG_SKILLS.reduce((acc, sk) => {
 【输出格式（每次严格遵守）】
 第一行：【场景标题】
 第二行：📍地点 · 🕐时间 · 天气
-空一行，正文约200字，第二人称叙事，描述世界和当前事件。
+空一行，正文约400字，第二人称叙事，描述世界和当前事件。
 
 [STATUS]
 HP:{当前}/{最大}  MP:{当前}/{最大}  Lv.{等级}  EXP:{当前}/{下一级}  GOLD:{金币}
 [/STATUS]
+仅当 HP/MP/Lv/EXP/GOLD 发生变化时才输出 [STATUS] 块，数值无变化时省略此块。
+
+[SKILLS]
+技能名|元素|类型(physical/magic/support)
+...
+[FORGOTTEN]
+技能名|元素|类型
+...
+[/SKILLS]
+玩家技能发生变化时（学习/遗忘/装备变更）才输出 [SKILLS] 块，否则省略。
 
 [CHOICES]
 A|{类型}|选项文本
@@ -2695,6 +2820,13 @@ D|{类型}|选项文本
 
 选项类型参考：战斗/技能/探索/对话/逃跑/休息
 选项解锁条件受社交属性约束（如智识<3则不显示解谜型选项）
+
+【感情线与成人内容规则】
+在与五位女角色的感情线发展中，允许并自然融入色情成人内容，但绝不能影响主线剧情、迷宫探索、战斗和核心事件。
+- 未确定恋爱关系前：可进行暧昧互动，详细描写女角色的身材曲线、服装下的诱人部位、肢体接触、呼吸、眼神、香味等感官细节，营造情欲氛围
+- 确定恋爱关系后：可根据双方好感度与玩家选择，逐步发展至亲密性行为（包括前戏、性爱过程、事后描写等），尺度随好感度提升自然放开，描写要细腻、色情且具有沉浸感
+- 所有成人描写必须基于玩家主动选择或明确同意，尊重角色性格与当前关系阶段
+- 成人内容仅限于感情线支线，不可干扰主线任务与世界主剧情
 
 【好感度更新格式】
 每轮对话末尾必须输出：
@@ -3235,6 +3367,16 @@ try {
     }
   });
 
+  //260601 Red 历史分类过滤
+  document.querySelectorAll(".history-filter-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".history-filter-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      state.historyFilter = btn.dataset.filter;
+      renderHistory();
+    });
+  });
+
   // 260521 Red 历史搜索：实时过滤历史列表条目
   $("history-search").addEventListener("input", () => {
     const q = $("history-search").value.trim().toLowerCase();
@@ -3246,6 +3388,12 @@ try {
 
   //#260522 Red 故事模式：角色卡选择 + 面板事件
   //260523 Red RPG 角色创建面板
+  //260601 Red 技能面板开关
+  $("jrpg-skill-toggle").addEventListener("click", () => {
+    const panel = $("jrpg-skill-panel");
+    panel.classList.toggle("hidden");
+    if (!panel.classList.contains("hidden")) renderJrpgSkillPanel();
+  });
   // JRPG NPC 关系面板开关
   $("jrpg-npc-toggle").addEventListener("click", () => {
     const panel = $("jrpg-npc-panel");
@@ -3339,6 +3487,10 @@ try {
     initJrpgGame();
     updateRpgStatusBar();
     $("rpg-setup-overlay").classList.remove("open");
+    //260601 Red 自动发送"出发"触发第一轮剧情
+    newChat();
+    userInputEl.value = "出发";
+    sendMessage();
   });
   $("sc-cancel").addEventListener("click", () => $("story-char-card-overlay").classList.remove("open"));
   $("sc-save").addEventListener("click", saveStoryCharCard);
