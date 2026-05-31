@@ -379,7 +379,7 @@ async function init() {
     document.body.classList.add("sidebar-collapsed");
   }
 
-  setupEventListeners();
+  try { setupEventListeners(); } catch(e) { console.error("setupEventListeners error:", e); }
   updateRpgStatusBar();
   updateNovelHeroineTag();
   renderPresets();
@@ -3191,7 +3191,6 @@ function updateNovelHeroineTag() {
 
 // ─── 事件绑定 ────────────────────────────────────────────────────────────────
 function setupEventListeners() {
-try {
   // 交通灯按钮
   $("btn-close")   .addEventListener("click", () => bridge.closeWindow());
   $("btn-minimize").addEventListener("click", () => bridge.minimize());
@@ -3264,7 +3263,17 @@ try {
 
   $("refresh-models-btn").addEventListener("click", () => loadModels(state.provider));
 
-  $("new-chat-btn").addEventListener("click", newChat);
+  $("new-chat-btn").addEventListener("click", () => {
+    newChat();
+    //260601 Red 新建对话后自动触发第一轮剧情
+    if (state.mode === "rpg") {
+      userInputEl.value = "出发";
+      sendMessage();
+    } else if (state.mode === "novel") {
+      userInputEl.value = "开始故事";
+      sendMessage();
+    }
+  });
   sendBtn.addEventListener("click", sendMessage);
   stopBtn.addEventListener("click", stopGeneration);
   $("tts-stop-btn").addEventListener("click", () => {
@@ -3386,7 +3395,6 @@ try {
     });
   });
 
-  //#260522 Red 故事模式：角色卡选择 + 面板事件
   //260523 Red RPG 角色创建面板
   //260601 Red 技能面板开关
   $("jrpg-skill-toggle").addEventListener("click", () => {
@@ -3517,10 +3525,10 @@ try {
     $("ns-hero-name").value  = state.novelHeroName || tpl?.default_hero || state.config.default_hero_name || "林然";
     $("ns-pov").value = state.novelPov || tpl?.default_pov || "third";
     $("ns-word-count").value   = state.novelWordCount || tpl?.default_words || 200;
-    $("novel-setup-overlay").classList.add("open");
+    $("novel-setup-overlay").style.display = "flex";
   });
   $("novel-setup-cancel").addEventListener("click", () => {
-    $("novel-setup-overlay").classList.remove("open");
+    $("novel-setup-overlay").style.display = "none";
   });
   $("novel-setup-confirm").addEventListener("click", () => {
     state.novelHeroName    = $("ns-hero-name").value.trim() || state.config.default_hero_name || "林然";
@@ -3546,12 +3554,12 @@ try {
       if (state.novelStages[i].cap <= state.novelStages[i-1].cap)
         state.novelStages[i].cap = state.novelStages[i-1].cap + 1;
     }
-    $("novel-setup-overlay").classList.remove("open");
+    $("novel-setup-overlay").style.display = "none";
 
-    const heroine = (state.config.novel_heroines || {})[state.novelHeroine];
-    if (heroine) {
-      newChat();
-    }
+    //260601 Red 确认后自动新建对话并发送触发词，启动第一轮剧情
+    newChat();
+    userInputEl.value = "开始故事";
+    sendMessage();
   });
   $("hc-cancel").addEventListener("click", () => $("heroine-card-overlay").classList.remove("open"));
   $("hc-save").addEventListener("click", saveHeroineCard);
@@ -3584,7 +3592,6 @@ try {
   $("prompt-form-save").addEventListener("click", saveNewPrompt);
 
   setupResizeHandles();
-} catch(e) { console.error("setupEventListeners error:", e); }
 }
 
 // ─── 启动 ────────────────────────────────────────────────────────────────────
