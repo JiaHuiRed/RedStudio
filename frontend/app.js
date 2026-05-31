@@ -293,7 +293,6 @@ const state = {
   jrpgNpcs: [],             // 当前游戏的NPC列表 [{name, role, personality, appearance, body, likes, fav, stage, avatar, element}]
   jrpgSocial: { 德行: 5, 智识: 5, 体魄: 5, 魅力: 5 },  // 社交属性
   jrpgTemplate: "校园异世界",  // 当前使用的JRPG模板名
-  jrpgSavedNpcs: [],        // 从角色库导入的NPC（用户保存的）
   novelHeroine: "",         //#260522 Red 当前选中的小说模式女主角名称
   //260523 Red 作者注记
   authorNote:      "",  // 注入 context 靠后位置的临时指令
@@ -1923,11 +1922,10 @@ function buildNovelSystemPrompt() {
   return [templateContent, heroineCard, manualExtra].filter(Boolean).join("\n\n");
 }
 
-// 解析 AI 回复：提取正文、[CHOICES] 块（含好感变化/类型）、[FAV:N] 标签
+// 解析 AI 回复：提取正文、[CHOICES] 块（含好感变化/类型）
 function parseContentBlocks(text) {
   let mainText = text;
   const choices = [];
-  let favDelta = 0;
 
   // 主格式：[CHOICES]...[/CHOICES]
   const choicesMatch = mainText.match(/\[CHOICES\]([\s\S]*?)\[\/CHOICES\]/);
@@ -1951,13 +1949,6 @@ function parseContentBlocks(text) {
     }
   }
 
-  // 自由输入响应的好感标签
-  const favMatch = mainText.match(/\[FAV:([+-]?\d+)\]/);
-  if (favMatch) {
-    favDelta = Math.max(-2, Math.min(5, parseInt(favMatch[1]) || 0));
-    mainText = mainText.replace(favMatch[0], "").trim();
-  }
-
   //260530 Red 选项解析兼容 A. B. C. D. 和 1. 2. 3. 4. 编号格式
   if (choices.length === 0) {
     const lines = mainText.split("\n");
@@ -1974,7 +1965,7 @@ function parseContentBlocks(text) {
     }
   }
 
-  return { mainText, choices, favDelta };
+  return { mainText, choices };
 }
 
 // 提取 [角色名] 前缀（RPG 模式 NPC 对话用）
@@ -2333,14 +2324,17 @@ function initJrpgGame(savedNpcNames = []) {
   const saved = state.config.jrpg_npc_library || {};
   let npcs = [];
 
+  //260530 Red NPC 数量从配置读取，默认 5
+  const npcCount = tpl.npc_count || 5;
+
   // 先加入用户保存的NPC
   for (const name of savedNpcNames) {
     if (saved[name]) npcs.push({ ...saved[name], fav: 0, stage: "陌生人" });
   }
 
-  // 从预置池和随机生成补齐到5个
+  // 从预置池和随机生成补齐
   const poolCopy = [...pool];
-  while (npcs.length < 5) {
+  while (npcs.length < npcCount) {
     if (poolCopy.length > 0) {
       const idx = Math.floor(Math.random() * poolCopy.length);
       const npc = poolCopy.splice(idx, 1)[0];
@@ -2397,27 +2391,57 @@ function deleteJrpgNpcFromLibrary(name) {
 }
 
 // 渲染NPC关系面板
+//260531 Red NPC 面板渲染：P5R 协力者卡片风格
+const ELEMENT_EMOJI = {
+  fire:"🔥", water:"💧", ground:"🌍", wind:"🌪",
+  ice:"❄️", thunder:"⚡", wood:"🌳", light:"✨", dark:"🌑"
+};
+const ELEMENT_COLOR = {
+  fire:"#e74c3c", water:"#3498db", ground:"#e67e22", wind:"#1abc9c",
+  ice:"#9b59b6", thunder:"#f1c40f", wood:"#27ae60", light:"#f5f5dc", dark:"#2c3e50"
+};
+
 function renderJrpgNpcPanel() {
   const list = $("jrpg-npc-list");
   if (!list) return;
   list.innerHTML = "";
   if (state.jrpgNpcs.length === 0) {
-    list.innerHTML = '<div style="font-size:11px;color:var(--text-secondary)">尚未开始游戏</div>';
+    list.innerHTML = '<div style="text-align:center;color:var(--text-tertiary);font-size:12px;padding:12px">尚未开始冒险</div>';
     return;
   }
   state.jrpgNpcs.forEach(npc => {
     const item = document.createElement("div");
-    item.className = "jrpg-npc-item";
+    item.className = "jrpg-npc-card";
     const color = charColor(npc.name);
+    const emoji = ELEMENT_EMOJI[npc.element] || "❓";
+    const eleColor = ELEMENT_COLOR[npc.element] || "#888";
+    const rank = npc.fav <= 20 ? 1 : npc.fav <= 50 ? 2 : npc.fav <= 80 ? 3 : 4;
+    const stageLabel = ["陌生人","朋友","暧昧","恋人"][rank - 1];
+    // 性格拆为标签（最多 3 个）
+    const tags = (npc.personality || "").split(/[、,，]/).slice(0, 3).filter(Boolean);
     item.innerHTML = `
-      <div class="jrpg-npc-avatar" style="background:${color}">${npc.name.charAt(0)}</div>
-      <div class="jrpg-npc-info">
-        <div class="jrpg-npc-name">${npc.name}</div>
-        <div class="jrpg-npc-role">${npc.role}</div>
+      <div class="jrpg-card-avatar" style="background:${color}">
+        ${npc.name.charAt(0)}
+        <span class="jrpg-card-element" style="background:${eleColor}" title="${npc.element}">${emoji}</span>
       </div>
-      <div class="jrpg-npc-fav">
-        <div class="jrpg-npc-fav-track"><div class="jrpg-npc-fav-fill" style="width:${npc.fav}%"></div></div>
-        <span class="jrpg-npc-stage">${npc.stage} ${npc.fav}</span>
+      <div class="jrpg-card-body">
+        <div class="jrpg-card-header">
+          <div class="jrpg-card-name">${npc.name}</div>
+          <div class="jrpg-card-role">${npc.role}</div>
+        </div>
+        <div class="jrpg-card-tags">
+          ${tags.map(t => `<span class="jrpg-tag">${t}</span>`).join("")}
+        </div>
+        <div class="jrpg-card-fav-row">
+          <div class="jrpg-card-fav-track">
+            <div class="jrpg-card-fav-fill" style="width:${npc.fav}%;background:${eleColor}"></div>
+          </div>
+          <span class="jrpg-card-fav-num">${npc.fav}</span>
+        </div>
+      </div>
+      <div class="jrpg-card-rank" style="color:${eleColor}">
+        <span class="jrpg-card-rank-num">${rank}</span>
+        <span class="jrpg-card-rank-label">${stageLabel}</span>
       </div>
       <button class="jrpg-npc-save-btn" title="保存到角色库">💾</button>
     `;
