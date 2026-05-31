@@ -4,6 +4,8 @@
 
   /* ── 亮色主题 ── */
   --bg:               #f2f2f7;
+  --bg-primary:       #ffffff;
+  --bg-secondary:     #f8f8fa;
   --sidebar-bg:       #fafafa;
   --sidebar-border:   rgba(0, 0, 0, 0.09);
   --main-bg:          #f2f2f7;
@@ -31,6 +33,7 @@
   --shadow-sm:  0 1px 4px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05);
   --shadow-md:  0 4px 20px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06);
   --radius-sm:  8px;
+  --radius:     12px;
   --radius-md:  12px;
   --radius-lg:  18px;
   --radius-xl:  22px;
@@ -43,6 +46,8 @@
 /* 护眼绿主题 — 经典护眼绿 */
 [data-theme="green"] {
   --bg:               #c7edcc;
+  --bg-primary:       #d8f2db;
+  --bg-secondary:     #b8e4be;
   --sidebar-bg:       #b8e4be;
   --sidebar-border:   rgba(0, 0, 0, 0.08);
   --main-bg:          #c7edcc;
@@ -75,6 +80,8 @@
 /* 护眼主题 — 暖米色，减少蓝光 */
 [data-theme="eye-care"] {
   --bg:               #f0ede4;
+  --bg-primary:       #faf8f2;
+  --bg-secondary:     #e8e4d8;
   --sidebar-bg:       #e8e4d8;
   --sidebar-border:   rgba(0, 0, 0, 0.08);
   --main-bg:          #f0ede4;
@@ -107,6 +114,8 @@
 /* 纯黑主题 — OLED 友好 */
 [data-theme="black"] {
   --bg:               #000000;
+  --bg-primary:       #1a1a1a;
+  --bg-secondary:     #0a0a0a;
   --sidebar-bg:       #0a0a0a;
   --sidebar-border:   rgba(255, 255, 255, 0.06);
   --main-bg:          #000000;
@@ -139,6 +148,8 @@
 /* 260515 Red 暗色主题 — Red Palette 深蓝系 */
 [data-theme="dark"] {
   --bg:               #0c0c18;
+  --bg-primary:       #1a1a2e;
+  --bg-secondary:     #13131f;
   --sidebar-bg:       #13131f;
   --sidebar-border:   rgba(91, 140, 255, 0.10);
   --main-bg:          #0c0c18;
@@ -1968,7 +1979,46 @@ body[data-mode="novel"] #mode-section {
   gap: 12px;
 }
 #rpg-setup-panel h2 { margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary); }
-#rpg-stats-grid, #rpg-social-grid {
+/*260601 Red 元素选择网格：3×3 九宫格*/
+#rpg-element-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 6px;
+}
+.rpg-element-btn {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  border: 2px solid var(--input-border);
+  background: var(--bg-primary);
+  font-size: 20px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rpg-element-btn:hover { border-color: var(--accent); }
+.rpg-element-btn.active { border-color: var(--accent); background: var(--accent-subtle); }
+/*260601 Red 导入角色按钮*/
+.rpg-import-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--input-border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.rpg-import-btn:hover { border-color: var(--accent); background: var(--accent-subtle); }
+#rpg-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+#rpg-social-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;

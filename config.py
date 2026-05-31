@@ -87,25 +87,6 @@ DEFAULT_CONFIG = {
                 {"act": "终章：日常", "desc": "回归校园，结局根据好感度分支"}
             ],
             "npc_count": 5,
-            "npc_pool": [
-                {"name": "陈思雨", "role": "同班同学", "personality": "内向、细腻、毒舌", "appearance": "长发及腰、黑框眼镜、气质清冷", "body": "纤细、平胸、腿长105cm", "likes": "读书、写诗、深夜电台"},
-                {"name": "李晓萌", "role": "邻班体育生", "personality": "开朗、直爽、好胜", "appearance": "马尾辫、小麦肤色、笑容灿烂", "body": "健美、翘臀、腿长110cm", "likes": "篮球、跑步、吃炸鸡"},
-                {"name": "王月琪", "role": "学生会副会长", "personality": "优雅、要强、外冷内热", "appearance": "短发齐耳、精致五官、气质出众", "body": "高挑、胸围C、腿长115cm", "likes": "钢琴、辩论、红酒"},
-                {"name": "赵灵", "role": "神秘转校生", "personality": "沉默、冷淡、偶尔温柔", "appearance": "银色长发、紫眸、气质空灵", "body": "娇小、胸围B、腿长95cm", "likes": "天文、摄影、深夜散步"},
-                {"name": "林可欣", "role": "青梅竹马", "personality": "活泼、话多、爱吃醋", "appearance": "双马尾、圆脸、酒窝", "body": "匀称、胸围B+、腿长108cm", "likes": "动漫、游戏、做饭"}
-            ],
-            "type_chart": {
-                "fire":  {"name": "火", "emoji": "🔥", "strong": ["ice", "wood"],   "weak": ["water", "ground"]},
-                "water": {"name": "水", "emoji": "💧", "strong": ["fire", "ground"], "weak": ["thunder", "ice", "wood"]},
-                "ground":{"name": "地", "emoji": "🌍", "strong": ["thunder", "fire"], "weak": ["water", "wind", "wood"]},
-                "wind":  {"name": "风", "emoji": "🌪", "strong": ["ground", "wood"], "weak": ["ice", "thunder"]},
-                "ice":   {"name": "冰", "emoji": "❄️", "strong": ["wind", "water", "wood"], "weak": ["fire"]},
-                "thunder":{"name": "雷", "emoji": "⚡", "strong": ["water", "wind"],  "weak": ["ground"]},
-                "wood":  {"name": "木", "emoji": "🌳", "strong": ["water", "ground"], "weak": ["fire", "ice", "wind"]},
-                "light": {"name": "光", "emoji": "✨", "strong": ["dark"],           "weak": ["dark"]},
-                "dark":  {"name": "暗", "emoji": "🌑", "strong": ["light"],          "weak": ["light"]},
-                "omni":  {"name": "全", "emoji": "💫", "strong": [],                 "weak": []}
-            },
             "social_attrs": ["德行", "智识", "体魄", "魅力"],
             "social_desc": {
                 "德行": "领导力与正义感，影响NPC信任度和队伍管理选项",

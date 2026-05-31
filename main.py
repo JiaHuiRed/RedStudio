@@ -1,5 +1,5 @@
 # author Red
-# @project  Red Studio  3.6.3
+# @project  Red Studio  3.7.0
 # @since    2026-05-14
 # @updated  2026-05-25
 # 260521 Red QWebChannel 重构：移除 Flask HTTP 层，改用 Qt 直接桥接

@@ -353,8 +353,15 @@
         <div class="settings-row" style="flex-direction:column;align-items:stretch">
           <label>模板内容 <span style="font-weight:400;color:var(--text-tertiary);font-size:11px">支持 {hero_name} {story_dir} {word_count} {pov} 占位符</span></label>
           <textarea id="st-content" rows="10" placeholder="粘贴你的完整提示词模板内容…" style="width:100%;padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--input-border);background:var(--input-bg);color:var(--text-primary);font-size:13px;font-family:var(--font);resize:vertical;outline:none;line-height:1.5;box-sizing:border-box"></textarea>
-        </div>
-        <div class="settings-actions">
+    </div>
+    <!-- 260601 Red 导入已有角色卡 -->
+    <div class="settings-group-title" style="font-size:12px;color:var(--text-secondary);margin:8px 0 6px">
+      导入已有角色
+    </div>
+    <div id="rpg-import-list" style="display:flex;flex-wrap:wrap;gap:6px;min-height:24px">
+      <span style="font-size:11px;color:var(--text-tertiary)">暂无已保存角色</span>
+    </div>
+    <div class="settings-actions">
           <button class="btn-secondary" id="st-cancel">取消</button>
           <button class="btn-primary" id="st-save">保存</button>
         </div>
@@ -488,11 +495,6 @@
         <label style="margin-bottom:6px">补充信息</label>
         <textarea id="hc-extra" rows="2" placeholder="人际关系、语言、其他细节…"></textarea>
       </div>
-      <!-- 260523 Red 开场白：故事开始时作为第一条 AI 消息插入，可含 [CHOICES] 块 -->
-      <div class="settings-row" style="flex-direction:column;align-items:stretch">
-        <label style="margin-bottom:4px">开场白 <span style="font-weight:400;color:var(--text-tertiary);font-size:11px">（开始新故事时自动作为 AI 第一条回复）</span></label>
-        <textarea id="hc-opening" rows="5" placeholder="直接写剧情正文，可附带 [CHOICES] 选项块（留空则由 AI 自动生成开头）"></textarea>
-      </div>
     </div>
     <div class="settings-actions" style="margin-top:16px">
       <button class="btn-secondary" id="hc-delete" style="margin-right:auto">删除</button>
@@ -506,51 +508,46 @@
 </div>
 
 <!-- 260521 Red marked.js / highlight.js 本地离线版 -->
-<!-- 260523 Red RPG 角色创建面板 -->
+<!-- 260601 Red JRPG 角色创建面板 -->
 <div id="rpg-setup-overlay" class="hidden">
   <div id="rpg-setup-panel">
     <h2>⚔ 开始冒险</h2>
-    <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px">
-      <label>世界 / 故事方向</label>
-      <textarea id="rpg-world-dir" rows="2" placeholder="例：黑暗奇幻大陆，魔王复苏，留白细节让 AI 随机填充"></textarea>
-    </div>
     <div class="settings-row">
-      <label>角色名</label>
-      <input id="rpg-char-name" type="text" placeholder="随机生成可留空">
-    </div>
-    <div class="settings-row">
-      <label>职业</label>
-      <select id="rpg-char-class">
-        <option value="">随机职业</option>
-        <option value="战士">战士</option>
-        <option value="法师">法师</option>
-        <option value="游侠">游侠</option>
-        <option value="刺客">刺客</option>
-        <option value="圣骑士">圣骑士</option>
-        <option value="召唤师">召唤师</option>
-      </select>
-    </div>
-    <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px">
-      <label>背景故事（留空随机）</label>
-      <textarea id="rpg-char-bg" rows="2" placeholder="例：北境流亡者，家族被灭门，追查真相的复仇者"></textarea>
+      <label>角色名 <span style="color:var(--danger)">*</span></label>
+      <input id="rpg-char-name" type="text" placeholder="必填" maxlength="20">
     </div>
     <div class="settings-group-title" style="font-size:12px;color:var(--text-secondary);margin:4px 0 6px">
-      战斗属性（各 5-20，影响初始 HP/MP 和战斗选项）
+      初始元素
     </div>
-    <div id="rpg-stats-grid">
-      <div class="rpg-stat-item"><label>力量</label><input class="rpg-stat-input" id="rpg-str" type="number" value="10" min="5" max="20"></div>
-      <div class="rpg-stat-item"><label>敏捷</label><input class="rpg-stat-input" id="rpg-agi" type="number" value="10" min="5" max="20"></div>
-      <div class="rpg-stat-item"><label>智力</label><input class="rpg-stat-input" id="rpg-int" type="number" value="10" min="5" max="20"></div>
-      <div class="rpg-stat-item"><label>体质</label><input class="rpg-stat-input" id="rpg-vit" type="number" value="10" min="5" max="20"></div>
+    <div id="rpg-element-grid">
+      <button class="rpg-element-btn" data-element="fire" title="火">🔥</button>
+      <button class="rpg-element-btn" data-element="water" title="水">💧</button>
+      <button class="rpg-element-btn" data-element="ground" title="地">🌍</button>
+      <button class="rpg-element-btn" data-element="wind" title="风">🌪</button>
+      <button class="rpg-element-btn" data-element="ice" title="冰">❄️</button>
+      <button class="rpg-element-btn" data-element="thunder" title="雷">⚡</button>
+      <button class="rpg-element-btn" data-element="wood" title="木">🌳</button>
+      <button class="rpg-element-btn" data-element="light" title="光">✨</button>
+      <button class="rpg-element-btn" data-element="dark" title="暗">🌑</button>
     </div>
     <div class="settings-group-title" style="font-size:12px;color:var(--text-secondary);margin:8px 0 6px">
-      社交属性（各 1-10，影响对话选项解锁和好感度获取）
+      战斗属性（各 1-3，上限 100）
+    </div>
+    <div id="rpg-stats-grid">
+      <div class="rpg-stat-item"><label>力</label><input class="rpg-stat-input" id="rpg-str" type="number" value="1" min="1" max="3"></div>
+      <div class="rpg-stat-item"><label>魔</label><input class="rpg-stat-input" id="rpg-mag" type="number" value="1" min="1" max="3"></div>
+      <div class="rpg-stat-item"><label>速</label><input class="rpg-stat-input" id="rpg-spd" type="number" value="1" min="1" max="3"></div>
+      <div class="rpg-stat-item"><label>防</label><input class="rpg-stat-input" id="rpg-def" type="number" value="1" min="1" max="3"></div>
+      <div class="rpg-stat-item"><label>体力</label><input class="rpg-stat-input" id="rpg-sta" type="number" value="1" min="1" max="3"></div>
+    </div>
+    <div class="settings-group-title" style="font-size:12px;color:var(--text-secondary);margin:8px 0 6px">
+      社交属性（各 1-2，上限 50）
     </div>
     <div id="rpg-social-grid">
-      <div class="rpg-stat-item"><label>德行</label><input class="rpg-stat-input" id="rpg-virtue" type="number" value="5" min="1" max="10"></div>
-      <div class="rpg-stat-item"><label>智识</label><input class="rpg-stat-input" id="rpg-intel" type="number" value="5" min="1" max="10"></div>
-      <div class="rpg-stat-item"><label>体魄</label><input class="rpg-stat-input" id="rpg-body" type="number" value="5" min="1" max="10"></div>
-      <div class="rpg-stat-item"><label>魅力</label><input class="rpg-stat-input" id="rpg-charm" type="number" value="5" min="1" max="10"></div>
+      <div class="rpg-stat-item"><label>德行</label><input class="rpg-stat-input" id="rpg-virtue" type="number" value="1" min="1" max="2"></div>
+      <div class="rpg-stat-item"><label>智识</label><input class="rpg-stat-input" id="rpg-intel" type="number" value="1" min="1" max="2"></div>
+      <div class="rpg-stat-item"><label>体魄</label><input class="rpg-stat-input" id="rpg-body" type="number" value="1" min="1" max="2"></div>
+      <div class="rpg-stat-item"><label>魅力</label><input class="rpg-stat-input" id="rpg-charm" type="number" value="1" min="1" max="2"></div>
     </div>
     <div class="settings-actions">
       <button class="btn-secondary" id="rpg-setup-cancel">取消</button>
@@ -567,32 +564,15 @@
       <label>选择模板 <span style="font-weight:400;color:var(--text-tertiary);font-size:11px">（在设置中管理模板）</span></label>
       <div id="ns-template-select" style="display:flex;flex-wrap:wrap;gap:6px"></div>
     </div>
-    <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:6px">
-      <label>故事方向 <span style="font-weight:400;color:var(--text-tertiary);font-size:11px">（模板中 {story_dir} 占位符将被替换为此内容）</span></label>
-      <textarea id="ns-story-dir" rows="3" placeholder="例：林然是大学女生宿舍的宿管员…"></textarea>
-    </div>
     <div class="settings-row" style="flex-direction:row;gap:12px">
-      <div style="flex:2"><label>男主名</label><input type="text" id="ns-hero-name" maxlength="20"/></div>
+      <div style="flex:1"><label>男主名</label><input type="text" id="ns-hero-name" maxlength="20"/></div>
       <div style="flex:1"><label>视角</label>
         <select id="ns-pov">
-          <option value="third" selected>第三人称（他/{hero_name}）</option>
-          <option value="first">第一人称（我/{hero_name}）</option>
+          <option value="third" selected>第三人称</option>
+          <option value="first">第一人称</option>
         </select>
       </div>
-      <div style="width:80px"><label>字数/轮</label><input id="ns-word-count" type="number" min="50" max="1000" step="50"></div>
-    </div>
-    <div class="settings-row" style="flex-direction:row;align-items:center;gap:10px">
-      <label style="flex-direction:row;align-items:center;gap:6px;font-size:13px;cursor:pointer;margin:0">
-        <input type="checkbox" id="ns-fav-enabled" checked /> 好感度系统
-      </label>
-      <label style="flex-direction:row;align-items:center;gap:4px;font-size:12px;color:var(--text-tertiary);margin:0">
-        起始值 <input id="ns-start-fav" type="number" value="0" min="0" max="99" style="width:50px;padding:3px 6px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text-primary);font-size:12px;text-align:center;outline:none">
-      </label>
-    </div>
-    <div class="settings-row" id="ns-stages-row" style="flex-direction:column;align-items:stretch;gap:4px">
-      <label style="font-size:12px;color:var(--text-tertiary)">好感度阶段（名称 · 上限 · 行为规则）</label>
-      <div id="ns-stages-table"></div>
-      <button id="ns-stage-add" style="align-self:flex-start;padding:3px 10px;border-radius:6px;border:1px dashed var(--input-border);background:transparent;color:var(--text-tertiary);font-size:11px;font-family:var(--font);cursor:pointer;transition:all 0.15s">+ 添加阶段</button>
+      <div style="flex:1"><label>字数/轮</label><input id="ns-word-count" type="number" min="50" max="1000" step="50"></div>
     </div>
     <div class="settings-actions">
       <button class="btn-secondary" id="novel-setup-cancel">取消</button>

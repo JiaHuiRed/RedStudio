@@ -279,19 +279,19 @@ const state = {
   currentSystemPrompt: "",  // 当前对话的系统提示词
   storyCharacters: {},      // { 角色名: { color, avatar } }
   storyCharCardName: "",    //#260522 Red 当前选中的故事模式角色卡名称
-  //260523 Red RPG 模式角色与状态
+  //260601 Red JRPG 模式角色与状态（P5R 五维 + 元素）
   rpgChar: {
-    name: "", class: "", background: "",
-    str: 10, agi: 10, int: 10, vit: 10
+    name: "", element: "fire",
+    str: 1, mag: 1, spd: 1, def: 1, sta: 1
   },
   rpgStatus: {
-    hp: 100, hpMax: 100, mp: 50, mpMax: 50,
+    hp: 50, hpMax: 50, mp: 20, mpMax: 20,
     lv: 1, exp: 0, expNext: 100, gold: 50
   },
-  rpgWorldDir: "",          // 世界/故事方向
+  //260601 Red rpgWorldDir 已移除，模板固定为 P5R 风格
   // JRPG 模式状态
   jrpgNpcs: [],             // 当前游戏的NPC列表 [{name, role, personality, appearance, body, likes, fav, stage, avatar, element}]
-  jrpgSocial: { 德行: 5, 智识: 5, 体魄: 5, 魅力: 5 },  // 社交属性
+  jrpgSocial: { 德行: 1, 智识: 1, 体魄: 1, 魅力: 1 },  // 社交属性
   jrpgTemplate: "校园异世界",  // 当前使用的JRPG模板名
   novelHeroine: "",         //#260522 Red 当前选中的小说模式女主角名称
   //260523 Red 作者注记
@@ -306,9 +306,8 @@ const state = {
     { name: "恋人",   cap: 100, rule: "可有亲密表达，视剧情自然推进，禁止无铺垫的成人向内容" }
   ],
   novelWordCount: 200,      // 每轮正文字数
-  novelPov:       "second", // 叙事视角 first/second/third
+  novelPov: "third",       // 叙事视角 first/third
   novelHeroName:  "林然",   // 主角名称
-  novelStoryDir:  "",       // 故事方向 / 主角背景
   // 260515 Red Token 统计：当前对话累计消耗
   sessionTokens: { prompt: 0, completion: 0 },
   // 260515 Red 提示词库：[{ title, content }]
@@ -551,10 +550,11 @@ function streamReply(model) {
   state.streamCtx = { bubble, content, avatarEl, ctx, usageData: null, renderTimer: null };
 
   //#260522 Red 构造请求：小说模式自动构建，JRPG模式使用模板化提示词，其余使用手动输入
+  //260601 Red buildJrpgSystemPrompt 内部已拼接 currentSystemPrompt，不再外层重复
   const sysPrompt = state.mode === "novel"
     ? buildNovelSystemPrompt()
     : state.mode === "rpg"
-      ? (buildJrpgSystemPrompt() + (state.currentSystemPrompt.trim() ? "\n\n" + state.currentSystemPrompt.trim() : ""))
+      ? buildJrpgSystemPrompt()
       : state.currentSystemPrompt.trim();
   const baseMessages = sysPrompt
     ? [{ role: "system", content: sysPrompt }, ...state.messages]
@@ -989,7 +989,7 @@ function appendMessage(role, content, msgIndex = -1) {
             setTimeout(() => sendMessage(), 300);
           };
           choicesDiv.appendChild(btn);
-        });
+  });
         contentDiv.appendChild(choicesDiv);
       }
       if (content) addMessageActions(contentDiv, () => content);
@@ -1138,26 +1138,6 @@ function editUserMessage(msgIndex, content) {
 }
 
 // ─── 新建对话 ────────────────────────────────────────────────────────────────
-//260523 Red 开场白注入：将预设文本作为首条 AI 消息渲染并存入历史
-function injectOpeningMessage(text) {
-  // 从 welcome 屏切换到对话视图
-  messagesEl.innerHTML = "";
-
-  const bubble  = addBubble("ai");
-  const content = bubble.querySelector(".bubble-content");
-  const textEl  = bubble.querySelector(".bubble-text");
-
-  // 小说模式走 renderNovelChapter，否则直接渲染 markdown
-  if (state.mode === "novel") {
-    renderNovelChapter(content, textEl, text);
-  } else {
-    textEl.innerHTML = typeof marked !== "undefined" ? marked.parse(text) : text;
-  }
-
-  // 写入对话历史，后续 AI 可以看到这条开场白
-  state.messages.push({ role: "assistant", content: text });
-  saveChatHistory();
-}
 
 function newChat() {
   if (state.messages.length > 0) saveChatHistory();
@@ -1175,7 +1155,7 @@ function newChat() {
   $("author-note-bar").classList.remove("open", "active");
   // 重置JRPG状态
   state.jrpgNpcs   = [];
-  state.jrpgSocial = { 德行: 5, 智识: 5, 体魄: 5, 魅力: 5 };
+  state.jrpgSocial = { 德行: 1, 智识: 1, 体魄: 1, 魅力: 1 };
 
   messagesEl.innerHTML = "";
   messagesEl.appendChild(makeWelcome());
@@ -1202,14 +1182,10 @@ function saveChatHistory() {
     existing.storyCharCardName = state.storyCharCardName;
     existing.novelWordCount    = state.novelWordCount;
     existing.novelPov          = state.novelPov;
-    existing.novelFavEnabled   = state.novelFavEnabled;
-    existing.novelHeroName     = state.novelHeroName;
-    existing.novelStoryDir     = state.novelStoryDir;
     existing.authorNote        = state.authorNote;
     existing.authorNoteDepth   = state.authorNoteDepth;
     existing.rpgChar           = { ...state.rpgChar };
     existing.rpgStatus         = { ...state.rpgStatus };
-    existing.rpgWorldDir       = state.rpgWorldDir;
     existing.jrpgNpcs          = JSON.parse(JSON.stringify(state.jrpgNpcs));
     existing.jrpgSocial        = { ...state.jrpgSocial };
   } else {
@@ -1229,12 +1205,10 @@ function saveChatHistory() {
       storyCharCardName: state.storyCharCardName,
       novelWordCount:    state.novelWordCount,
       novelPov:          state.novelPov,
-      novelStoryDir:     state.novelStoryDir,
       authorNote:        state.authorNote,
       authorNoteDepth:   state.authorNoteDepth,
       rpgChar:           { ...state.rpgChar },
       rpgStatus:         { ...state.rpgStatus },
-      rpgWorldDir:       state.rpgWorldDir,
       jrpgNpcs:          JSON.parse(JSON.stringify(state.jrpgNpcs)),
       jrpgSocial:        { ...state.jrpgSocial }
     });
@@ -1337,7 +1311,6 @@ function loadChat(chat) {
   state.novelWordCount      = chat.novelWordCount    || 200;
   state.novelPov            = chat.novelPov          || "second";
   state.novelHeroName       = chat.novelHeroName     || "林然";
-  state.novelStoryDir       = chat.novelStoryDir     || "";
   state.authorNote          = chat.authorNote        || "";
   state.authorNoteDepth     = chat.authorNoteDepth   ?? 3;
   // 旧存档兼容：过滤 rpgChar 中已废弃的社交属性字段
@@ -1346,10 +1319,9 @@ function loadChat(chat) {
     state.rpgChar = { ...state.rpgChar, ...cleanRpgChar };
   }
   if (chat.rpgStatus) state.rpgStatus = { ...state.rpgStatus, ...chat.rpgStatus };
-  state.rpgWorldDir         = chat.rpgWorldDir       || "";
   // 恢复JRPG状态
   state.jrpgNpcs            = Array.isArray(chat.jrpgNpcs) ? chat.jrpgNpcs : [];
-  state.jrpgSocial          = chat.jrpgSocial || { 德行: 5, 智识: 5, 体魄: 5, 魅力: 5 };
+  state.jrpgSocial          = chat.jrpgSocial || { 德行: 1, 智识: 1, 体魄: 1, 魅力: 1 };
   updateRpgStatusBar();
   updateNovelHeroineTag();
   $("author-note-input").value = state.authorNote;
@@ -1888,7 +1860,7 @@ function buildNovelSystemPrompt() {
     // 替换占位符
     templateContent = templateContent
       .replace(/\{hero_name\}/g, heroName)
-      .replace(/\{story_dir\}/g, (state.novelStoryDir || "").trim() || "无特殊设定")
+      .replace(/\{story_dir\}/g, "无特殊设定")
       .replace(/\{word_count\}/g, String(state.novelWordCount || 200))
       .replace(/\{pov\}/g, state.novelPov === "first" ? "第一人称" : "第三人称");
   }
@@ -2060,7 +2032,6 @@ function openHeroineCard(name) {
   $("hc-origin").value      = h.origin      || (isNew ? "大学生、职场新人" : "");
   $("hc-schedule").value    = h.schedule    || "";
   $("hc-extra").value       = h.extra       || "";
-  $("hc-opening").value     = h.opening     || "";
   $("hc-delete").style.display = name ? "" : "none";
   $("heroine-card-overlay").classList.add("open");
 }
@@ -2086,8 +2057,7 @@ function saveHeroineCard() {
     hobbies:     $("hc-hobbies").value.trim(),
     origin:      $("hc-origin").value.trim(),
     schedule:    $("hc-schedule").value.trim(),
-    extra:       $("hc-extra").value.trim(),
-    opening:     $("hc-opening").value.trim()
+    extra:       $("hc-extra").value.trim()
   };
 
   state.config.novel_heroines = heroines;
@@ -2154,8 +2124,6 @@ function fillHeroineFromTavern(card) {
   $("hc-origin").value      = (card.scenario || "").slice(0, 150);
   $("hc-schedule").value    = "";
   $("hc-extra").value       = (card.creator_notes || card.system_prompt || "").slice(0, 300);
-  //260523 Red SillyTavern first_mes → 开场白
-  $("hc-opening").value     = (card.first_mes || "").slice(0, 2000);
 }
 
 function fillStoryCharFromTavern(card) {
@@ -2223,10 +2191,58 @@ function renderRpgChapter(content, bubble, text) {
   renderMarkdownBubble(bubble, mainText);
   // 解析JRPG好感度变化
   const favResults = parseJrpgFav(cleanText);
-  // 如果有好感度变化，显示浮动提示
   favResults.forEach(r => {
     showToast(`${r.name} 好感度 ${r.delta > 0 ? '+' : ''}${r.delta}（${r.stage}）`);
   });
+  //260601 Red 角色卡检测：渲染一键导入按钮
+  if (text.includes("【角色卡】")) {
+    const cardMatch = text.match(/【角色卡】([\s\S]*?)(?=\n【|$)/);
+    if (cardMatch) {
+      const cardText = cardMatch[1];
+      const nameMatch = cardText.match(/姓名[：:]\s*(.+)/);
+      const npcName = nameMatch ? nameMatch[1].trim() : "";
+      if (npcName && !state.jrpgNpcs.find(n => n.name === npcName)) {
+        const importBtn = document.createElement("button");
+        importBtn.className = "novel-choice-btn";
+        importBtn.textContent = `📥 导入 ${npcName} 到角色库`;
+        importBtn.style.cssText = "margin-top:8px;border-color:var(--accent);color:var(--accent)";
+        importBtn.addEventListener("click", () => {
+          const roleMatch = cardText.match(/角色[：:]\s*(.+)/);
+          const persMatch = cardText.match(/性格[：:]\s*(.+)/);
+          const appearMatch = cardText.match(/外貌[：:]\s*(.+)/);
+          const bodyMatch = cardText.match(/身材[：:]\s*(.+)/);
+          const likesMatch = cardText.match(/爱好[：:]\s*(.+)/);
+          const elemMatch = cardText.match(/元素[：:]\s*(.+)/);
+          // 从元素名反查 key
+          let elementKey = "fire";
+          if (elemMatch) {
+            const elemName = elemMatch[1].trim();
+            const found = Object.entries(JRPG_TYPE_CHART).find(([, v]) => v.name === elemName || v.emoji === elemName);
+            if (found) elementKey = found[0];
+          }
+          const npcData = {
+            name: npcName,
+            role: roleMatch ? roleMatch[1].trim() : "",
+            personality: persMatch ? persMatch[1].trim() : "",
+            appearance: appearMatch ? appearMatch[1].trim() : "",
+            body: bodyMatch ? bodyMatch[1].trim() : "",
+            likes: likesMatch ? likesMatch[1].trim() : "",
+            element: elementKey,
+            fav: 0, stage: "陌生人"
+          };
+          const library = { ...(state.config.jrpg_npc_library || {}) };
+          library[npcName] = npcData;
+          state.config.jrpg_npc_library = library;
+          postConfig({ jrpg_npc_library: library });
+          importBtn.textContent = `✅ ${npcName} 已导入`;
+          importBtn.disabled = true;
+          importBtn.style.opacity = "0.5";
+          showToast(`${npcName} 已保存到角色库`);
+        });
+        content.appendChild(importBtn);
+      }
+    }
+  }
   // 从正文中提取敌人属性（用于战斗选项提示）
   const enemyElementMatch = mainText.match(/属性[：:]\s*(\S+)/);
   const enemyElement = enemyElementMatch ? enemyElementMatch[1] : null;
@@ -2283,6 +2299,151 @@ const JRPG_TYPE_CHART = {
   omni:   { name: "全", emoji: "💫", strong: [],                     weak: [] }
 };
 
+//260601 Red 技能库：10 属性 × 13 技能（5初级/4中级/3高级/1究极）
+// type: physical=物理(力), magic=魔法(魔), support=辅助(无伤害)
+const JRPG_SKILLS = [
+  // ── 火系 ──
+  { name:"火焰拳",     element:"fire", type:"physical", tier:1, desc:"附着火焰的拳击" },
+  { name:"灼烧",       element:"fire", type:"magic",    tier:1, desc:"发射小型火球" },
+  { name:"烈焰斩",     element:"fire", type:"physical", tier:1, desc:"刀刃燃起火焰挥砍" },
+  { name:"火焰弹",     element:"fire", type:"magic",    tier:1, desc:"快速发射火弹" },
+  { name:"火之庇护",   element:"fire", type:"support",  tier:1, desc:"火焰护盾，提升防御" },
+  { name:"烈焰冲击",   element:"fire", type:"physical", tier:2, desc:"全身包裹火焰冲撞" },
+  { name:"爆炎波",     element:"fire", type:"magic",    tier:2, desc:"释放环形爆炸火焰" },
+  { name:"火焰旋风",   element:"fire", type:"magic",    tier:2, desc:"召唤火焰龙卷风" },
+  { name:"熔岩护甲",   element:"fire", type:"support",  tier:2, desc:"熔岩包裹全身，大幅提高防御" },
+  { name:"炎帝之怒",   element:"fire", type:"magic",    tier:3, desc:"召唤炎帝之力，烈焰焚天" },
+  { name:"灰烬风暴",   element:"fire", type:"magic",    tier:3, desc:"释放毁灭性火焰风暴" },
+  { name:"不灭之焰",   element:"fire", type:"support",  tier:3, desc:"火焰环绕，持续回复HP" },
+  { name:"超新星爆发", element:"fire", type:"magic",    tier:4, desc:"引爆太阳般的火焰，全体毁灭打击" },
+  // ── 水系 ──
+  { name:"水弹",       element:"water", type:"magic",    tier:1, desc:"发射高压水弹" },
+  { name:"水流斩",     element:"water", type:"physical", tier:1, desc:"水刃切割敌人" },
+  { name:"水之护盾",   element:"water", type:"support",  tier:1, desc:"水幕环绕，减少伤害" },
+  { name:"溅射",       element:"water", type:"magic",    tier:1, desc:"水花四溅攻击多个目标" },
+  { name:"治愈之水",   element:"water", type:"support",  tier:1, desc:"召唤治愈之水回复HP" },
+  { name:"激流冲击",   element:"water", type:"physical", tier:2, desc:"操控水流猛力冲击" },
+  { name:"冰冻水流",   element:"water", type:"magic",    tier:2, desc:"极寒水流冻结敌人" },
+  { name:"潮汐之力",   element:"water", type:"magic",    tier:2, desc:"召唤潮汐冲击全场" },
+  { name:"水之祝福",   element:"water", type:"support",  tier:2, desc:"水之力量治愈全队" },
+  { name:"海神之怒",   element:"water", type:"magic",    tier:3, desc:"召唤海神之力淹没敌人" },
+  { name:"深渊水牢",   element:"water", type:"magic",    tier:3, desc:"水之牢笼困住并持续伤害" },
+  { name:"生命之泉",   element:"water", type:"support",  tier:3, desc:"召唤生命之泉，大幅回复全队HP" },
+  { name:"世界洪流",   element:"water", type:"magic",    tier:4, desc:"引发全球洪流，全体水属性毁灭打击" },
+  // ── 地系 ──
+  { name:"岩石投掷",   element:"ground", type:"physical", tier:1, desc:"投掷石块攻击" },
+  { name:"地震波",     element:"ground", type:"magic",    tier:1, desc:"释放地面震动波" },
+  { name:"土之壁垒",   element:"ground", type:"support",  tier:1, desc:"土墙挡在前方，提高防御" },
+  { name:"落石",       element:"ground", type:"magic",    tier:1, desc:"召唤落石砸向敌人" },
+  { name:"地裂斩",     element:"ground", type:"physical", tier:1, desc:"劈开地面造成裂缝" },
+  { name:"岩浆喷发",   element:"ground", type:"magic",    tier:2, desc:"引发岩浆喷涌" },
+  { name:"巨石碾压",   element:"ground", type:"physical", tier:2, desc:"操控巨石碾压敌人" },
+  { name:"泥沼陷阱",   element:"ground", type:"support",  tier:2, desc:"制造泥沼降低敌人速度" },
+  { name:"山脉之力",   element:"ground", type:"physical", tier:2, desc:"借助山脉之力重击" },
+  { name:"大地震颤",   element:"ground", type:"magic",    tier:3, desc:"引发剧烈地震" },
+  { name:"陨石坠落",   element:"ground", type:"magic",    tier:3, desc:"召唤陨石从天而降" },
+  { name:"不屈之岩",   element:"ground", type:"support",  tier:3, desc:"岩石铠甲，大幅提高防御和HP" },
+  { name:"大陆崩裂",   element:"ground", type:"magic",    tier:4, desc:"撕裂大地，全体地属性毁灭打击" },
+  // ── 风系 ──
+  { name:"风刃",       element:"wind", type:"magic",    tier:1, desc:"释放锋利的风之刃" },
+  { name:"疾风斩",     element:"wind", type:"physical", tier:1, desc:"借风速挥出快速斩击" },
+  { name:"风之加护",   element:"wind", type:"support",  tier:1, desc:"风之力量提升速度" },
+  { name:"旋风",       element:"wind", type:"magic",    tier:1, desc:"制造小型旋风" },
+  { name:"气流斩",     element:"wind", type:"physical", tier:1, desc:"压缩气流进行斩击" },
+  { name:"真空斩",     element:"wind", type:"physical", tier:2, desc:"真空刃切割一切" },
+  { name:"雷暴风云",   element:"wind", type:"magic",    tier:2, desc:"召唤雷暴云攻击" },
+  { name:"风之翼",     element:"wind", type:"support",  tier:2, desc:"风之力量大幅提升速度和闪避" },
+  { name:"龙卷风",     element:"wind", type:"magic",    tier:2, desc:"召唤强力龙卷风" },
+  { name:"天风破",     element:"wind", type:"magic",    tier:3, desc:"操控天风之力轰击" },
+  { name:"风暴之眼",   element:"wind", type:"magic",    tier:3, desc:"在风暴中心释放毁灭能量" },
+  { name:"苍穹之风",   element:"wind", type:"support",  tier:3, desc:"天空之风治愈并加速全队" },
+  { name:"永恒风暴",   element:"wind", type:"magic",    tier:4, desc:"引发永恒风暴，全体风属性毁灭打击" },
+  // ── 冰系 ──
+  { name:"冰锥",       element:"ice", type:"magic",    tier:1, desc:"发射冰锥刺穿敌人" },
+  { name:"寒冰斩",     element:"ice", type:"physical", tier:1, desc:"冰刃挥砍，附带冻结" },
+  { name:"冰之壁障",   element:"ice", type:"support",  tier:1, desc:"冰墙阻挡攻击" },
+  { name:"霜冻气息",   element:"ice", type:"magic",    tier:1, desc:"吐出寒冰气息" },
+  { name:"冰晶碎片",   element:"ice", type:"magic",    tier:1, desc:"发射冰晶碎片群" },
+  { name:"冰枪穿刺",   element:"ice", type:"physical", tier:2, desc:"巨型冰枪贯穿敌人" },
+  { name:"暴风雪",     element:"ice", type:"magic",    tier:2, desc:"召唤暴风雪席卷" },
+  { name:"极寒领域",   element:"ice", type:"support",  tier:2, desc:"制造极寒领域降低敌人速度" },
+  { name:"冰封之心",   element:"ice", type:"support",  tier:2, desc:"冰之力量提升魔防" },
+  { name:"绝对零度",   element:"ice", type:"magic",    tier:3, desc:"释放绝对零度冻结一切" },
+  { name:"冰河崩塌",   element:"ice", type:"magic",    tier:3, desc:"巨型冰河崩塌碾压" },
+  { name:"永恒冰封",   element:"ice", type:"support",  tier:3, desc:"冰封状态大幅回复HP" },
+  { name:"冰河世纪",   element:"ice", type:"magic",    tier:4, desc:"引发冰河世纪，全体冰属性毁灭打击" },
+  // ── 雷系 ──
+  { name:"电击",       element:"thunder", type:"magic",    tier:1, desc:"释放电流电击敌人" },
+  { name:"雷光斩",     element:"thunder", type:"physical", tier:1, desc:"雷电附着刀刃斩击" },
+  { name:"静电护盾",   element:"thunder", type:"support",  tier:1, desc:"静电环绕，反弹部分伤害" },
+  { name:"闪电链",     element:"thunder", type:"magic",    tier:1, desc:"连锁闪电攻击" },
+  { name:"雷鸣",       element:"thunder", type:"magic",    tier:1, desc:"引发雷鸣震击" },
+  { name:"雷霆一击",   element:"thunder", type:"physical", tier:2, desc:"集中雷电于一击" },
+  { name:"闪电风暴",   element:"thunder", type:"magic",    tier:2, desc:"召唤闪电风暴" },
+  { name:"雷之加速",   element:"thunder", type:"support",  tier:2, desc:"雷电之力大幅提升速度" },
+  { name:"连环闪电",   element:"thunder", type:"magic",    tier:2, desc:"连续释放多道闪电" },
+  { name:"天雷降临",   element:"thunder", type:"magic",    tier:3, desc:"召唤天雷轰击" },
+  { name:"雷神之怒",   element:"thunder", type:"magic",    tier:3, desc:"雷神之力毁灭一切" },
+  { name:"雷电领域",   element:"thunder", type:"support",  tier:3, desc:"雷电领域大幅提高全队速度和闪避" },
+  { name:"万雷天降",   element:"thunder", type:"magic",    tier:4, desc:"万道天雷降世，全体雷属性毁灭打击" },
+  // ── 木系 ──
+  { name:"藤鞭",       element:"wood", type:"physical", tier:1, desc:"操控藤蔓抽打" },
+  { name:"树叶飞镖",   element:"wood", type:"magic",    tier:1, desc:"发射锋利树叶" },
+  { name:"自然治愈",   element:"wood", type:"support",  tier:1, desc:"自然之力回复HP" },
+  { name:"花粉散播",   element:"wood", type:"magic",    tier:1, desc:"散播花粉干扰敌人" },
+  { name:"树根缠绕",   element:"wood", type:"support",  tier:1, desc:"树根缠绕降低敌人速度" },
+  { name:"荆棘之盾",   element:"wood", type:"physical", tier:2, desc:"荆棘包裹的盾牌反击" },
+  { name:"毒藤蔓延",   element:"wood", type:"magic",    tier:2, desc:"毒藤持续伤害" },
+  { name:"森林之力",   element:"wood", type:"support",  tier:2, desc:"借助森林之力回复全队HP" },
+  { name:"巨树冲击",   element:"wood", type:"physical", tier:2, desc:"操控巨树撞击" },
+  { name:"世界树之光", element:"wood", type:"support",  tier:3, desc:"世界树之力全队大幅回复" },
+  { name:"森林怒吼",   element:"wood", type:"magic",    tier:3, desc:"森林之力化为攻击波" },
+  { name:"生命之种",   element:"wood", type:"support",  tier:3, desc:"播撒生命种子持续回复" },
+  { name:"世界树觉醒", element:"wood", type:"magic",    tier:4, desc:"世界树觉醒，全体木属性毁灭打击" },
+  // ── 光系 ──
+  { name:"闪光",       element:"light", type:"magic",    tier:1, desc:"释放光芒灼伤" },
+  { name:"光刃",       element:"light", type:"physical", tier:1, desc:"光之刃斩击" },
+  { name:"净化之光",   element:"light", type:"support",  tier:1, desc:"净化异常状态" },
+  { name:"圣光弹",     element:"light", type:"magic",    tier:1, desc:"发射圣光弹" },
+  { name:"光之守护",   element:"light", type:"support",  tier:1, desc:"光之护盾提高魔防" },
+  { name:"神圣冲击",   element:"light", type:"physical", tier:2, desc:"神圣力量冲击" },
+  { name:"光之牢笼",   element:"light", type:"magic",    tier:2, desc:"光之牢笼困住敌人" },
+  { name:"圣光治愈",   element:"light", type:"support",  tier:2, desc:"圣光大幅回复HP" },
+  { name:"光之加速",   element:"light", type:"support",  tier:2, desc:"光之力量提升速度和闪避" },
+  { name:"神圣制裁",   element:"light", type:"magic",    tier:3, desc:"神圣之力制裁邪恶" },
+  { name:"天使之翼",   element:"light", type:"support",  tier:3, desc:"天使降临，全队大幅提升属性" },
+  { name:"审判之光",   element:"light", type:"magic",    tier:3, desc:"审判之光净化黑暗" },
+  { name:"终极审判",   element:"light", type:"magic",    tier:4, desc:"终极审判降临，全体光属性毁灭打击" },
+  // ── 暗系 ──
+  { name:"暗影爪",     element:"dark", type:"physical", tier:1, desc:"暗影凝聚为爪攻击" },
+  { name:"暗箭",       element:"dark", type:"magic",    tier:1, desc:"发射暗影之箭" },
+  { name:"暗之屏障",   element:"dark", type:"support",  tier:1, desc:"暗影屏障降低被命中率" },
+  { name:"恐惧之眼",   element:"dark", type:"magic",    tier:1, desc:"释放恐惧压制敌人" },
+  { name:"暗影潜行",   element:"dark", type:"support",  tier:1, desc:"暗影中隐匿，提升闪避" },
+  { name:"暗影吞噬",   element:"dark", type:"physical", tier:2, desc:"暗影吞噬敌人生命力" },
+  { name:"噩梦缠绕",   element:"dark", type:"magic",    tier:2, desc:"噩梦之力持续伤害" },
+  { name:"暗之诅咒",   element:"dark", type:"support",  tier:2, desc:"诅咒降低敌人全属性" },
+  { name:"灵魂吸取",   element:"dark", type:"magic",    tier:2, desc:"吸取敌人灵魂转化为自身HP" },
+  { name:"冥界之门",   element:"dark", type:"magic",    tier:3, desc:"开启冥界之门释放黑暗" },
+  { name:"深渊凝视",   element:"dark", type:"magic",    tier:3, desc:"深渊之力凝视敌人" },
+  { name:"暗之领域",   element:"dark", type:"support",  tier:3, desc:"暗之领域大幅降低敌人命中和速度" },
+  { name:"终焉黑暗",   element:"dark", type:"magic",    tier:4, desc:"终焉黑暗降临，全体暗属性毁灭打击" },
+  // ── 全能系 ──
+  { name:"全能冲击",   element:"omni", type:"physical", tier:1, desc:"全能之力冲击" },
+  { name:"全能弹",     element:"omni", type:"magic",    tier:1, desc:"全能能量弹" },
+  { name:"全能屏障",   element:"omni", type:"support",  tier:1, desc:"全能护盾提高全属性防御" },
+  { name:"全能治愈",   element:"omni", type:"support",  tier:1, desc:"全能之力回复HP" },
+  { name:"全能加速",   element:"omni", type:"support",  tier:1, desc:"全能之力提升速度" },
+  { name:"全能爆发",   element:"omni", type:"physical", tier:2, desc:"全能力量集中爆发" },
+  { name:"全能风暴",   element:"omni", type:"magic",    tier:2, desc:"全能能量风暴" },
+  { name:"全能守护",   element:"omni", type:"support",  tier:2, desc:"全能守护大幅回复全队HP" },
+  { name:"全能强化",   element:"omni", type:"support",  tier:2, desc:"全能之力提升全队属性" },
+  { name:"全能审判",   element:"omni", type:"magic",    tier:3, desc:"全能审判之力" },
+  { name:"全能领域",   element:"omni", type:"support",  tier:3, desc:"全能领域全属性大幅提升" },
+  { name:"全能毁灭",   element:"omni", type:"magic",    tier:3, desc:"全能毁灭能量" },
+  { name:"万物归一",   element:"omni", type:"magic",    tier:4, desc:"万物归于虚无，终极全能毁灭" },
+];
+
 // 随机名字生成器
 const JRPG_SURNAMES = ["陈","李","王","张","刘","杨","赵","黄","周","吴","徐","孙","马","朱","胡","林","郭","何","高","罗"];
 const JRPG_GIVEN_NAMES = ["思雨","晓萌","月琪","灵","可欣","子涵","雨萱","诗涵","欣怡","紫萱","梦琪","雅琴","若兰","静怡","思琪","佳怡","雪珊","美玲","小燕","丽华"];
@@ -2320,11 +2481,10 @@ function generateRandomNpc() {
 // 初始化JRPG游戏：生成NPC列表
 function initJrpgGame(savedNpcNames = []) {
   const tpl = (state.config.jrpg_templates || {})[state.jrpgTemplate] || {};
-  const pool = tpl.npc_pool || [];
   const saved = state.config.jrpg_npc_library || {};
   let npcs = [];
 
-  //260530 Red NPC 数量从配置读取，默认 5
+  //260601 Red NPC 数量从配置读取，默认 5
   const npcCount = tpl.npc_count || 5;
 
   // 先加入用户保存的NPC
@@ -2332,16 +2492,9 @@ function initJrpgGame(savedNpcNames = []) {
     if (saved[name]) npcs.push({ ...saved[name], fav: 0, stage: "陌生人" });
   }
 
-  // 从预置池和随机生成补齐
-  const poolCopy = [...pool];
+  // 全部随机生成补齐
   while (npcs.length < npcCount) {
-    if (poolCopy.length > 0) {
-      const idx = Math.floor(Math.random() * poolCopy.length);
-      const npc = poolCopy.splice(idx, 1)[0];
-      npcs.push({ ...npc, fav: 0, stage: "陌生人", avatar: "" });
-    } else {
-      npcs.push(generateRandomNpc());
-    }
+    npcs.push(generateRandomNpc());
   }
 
   state.jrpgNpcs = npcs;
@@ -2461,11 +2614,12 @@ function buildJrpgSystemPrompt() {
   const social = state.jrpgSocial;
   const npcs = state.jrpgNpcs;
 
+  //260601 Red 系统提示词：P5R 五维属性 + 元素
   const charLines = [
     c.name && `姓名：${c.name}`,
-    c.class && `职业：${c.class}`,
-    c.background && `背景：${c.background}`,
-    `战斗属性——力量${c.str} 敏捷${c.agi} 智力${c.int} 体质${c.vit}`,
+    `元素属性：${JRPG_TYPE_CHART[c.element]?.emoji || "?"}${JRPG_TYPE_CHART[c.element]?.name || c.element}`,
+    `战斗属性——力${c.str} 魔${c.mag} 速${c.spd} 防${c.def} 体力${c.sta}`,
+    `HP：${s.hp}/${s.hpMax}  MP：${s.mp}/${s.mpMax}  Lv.${s.lv}  EXP：${s.exp}/${s.expNext}  金币：${s.gold}`,
     `社交属性——德行${social.德行} 智识${social.智识} 体魄${social.体魄} 魅力${social.魅力}`,
   ].filter(Boolean).join("\n");
 
@@ -2482,7 +2636,8 @@ function buildJrpgSystemPrompt() {
     .map(([k, v]) => `${v.emoji}${v.name}克${v.strong.map(s => JRPG_TYPE_CHART[s]?.name).join("、")}｜被${v.weak.map(w => JRPG_TYPE_CHART[w]?.emoji + JRPG_TYPE_CHART[w]?.name).join("、")}克`)
     .join("\n");
 
-  const world = tpl.world_desc || (state.rpgWorldDir || "").trim();
+  //260601 Red 世界设定固定从模板读取
+  const world = tpl.world_desc || "";
   const manualExtra = state.currentSystemPrompt.trim();
 
   return `你是一部 JRPG 文字冒险游戏的 DM（地下城主），负责生成整个游戏世界和所有 NPC、怪物、事件。玩家扮演以下角色：
@@ -2496,6 +2651,25 @@ ${npcLines}
 【属性克制表】
 ${typeLines}
 效果倍率：克制=2倍伤害，普通=1倍，被克制=0.5倍
+
+【技能库（物理技能受力加成，魔法技能受魔加成，辅助技能无伤害）】
+${Object.entries(JRPG_SKILLS.reduce((acc, sk) => {
+  if (!acc[sk.element]) acc[sk.element] = [];
+  acc[sk.element].push(sk);
+  return acc;
+}, {})).map(([el, skills]) => {
+  const emoji = JRPG_TYPE_CHART[el]?.emoji || "?";
+  const name = JRPG_TYPE_CHART[el]?.name || el;
+  const byTier = [1,2,3,4].map(t => skills.filter(s => s.tier === t).map(s => `${s.name}(${s.type === "physical" ? "物" : s.type === "magic" ? "魔" : "辅"})`).join("、")).filter(Boolean);
+  return `${emoji}${name}：${byTier.join(" | ")}`;
+}).join("\n")}
+
+【技能管理规则】
+- 玩家最多装备4个技能，可在战斗中自由切换
+- 升级或剧情事件时可从技能库学习新技能
+- 超出4个时必须替换一个，被替换的技能进入遗忘列表
+- 遗忘列表中的技能可随时找回
+- NPC也有各自的元素属性和技能，由你根据角色定位分配
 
 【社交属性效果】
 德行${social.德行}：影响NPC信任度和队伍管理选项
@@ -2671,9 +2845,8 @@ function renderTemplateSelect() {
       const tpl = templates[name];
       if (tpl) {
         $("ns-hero-name").value = tpl.default_hero || state.config.default_hero_name || "林然";
-        $("ns-pov").value = tpl.default_pov || "second";
+        $("ns-pov").value = tpl.default_pov || "third";
         $("ns-word-count").value = tpl.default_words || 200;
-        $("ns-fav-enabled").checked = tpl.fav_enabled !== false;
       }
     });
     wrap.appendChild(btn);
@@ -2687,9 +2860,8 @@ function renderTemplateSelect() {
       const tpl = templates[names[0]];
       if (tpl) {
         $("ns-hero-name").value = tpl.default_hero || state.config.default_hero_name || "林然";
-        $("ns-pov").value = tpl.default_pov || "second";
+        $("ns-pov").value = tpl.default_pov || "third";
         $("ns-word-count").value = tpl.default_words || 200;
-        $("ns-fav-enabled").checked = tpl.fav_enabled !== false;
       }
     }
   }
@@ -2887,6 +3059,7 @@ function updateNovelHeroineTag() {
 
 // ─── 事件绑定 ────────────────────────────────────────────────────────────────
 function setupEventListeners() {
+try {
   // 交通灯按钮
   $("btn-close")   .addEventListener("click", () => bridge.closeWindow());
   $("btn-minimize").addEventListener("click", () => bridge.minimize());
@@ -3041,11 +3214,6 @@ function setupEventListeners() {
   $("s-template-add-btn").addEventListener("click", () => openTemplateForm(null));
   $("st-cancel").addEventListener("click", closeTemplateForm);
   $("st-save").addEventListener("click", saveTemplate);
-  // 好感度开关控制阶段行显隐
-  $("ns-fav-enabled").addEventListener("change", () => {
-    const row = $("ns-stages-row");
-    if (row) row.style.display = $("ns-fav-enabled").checked ? "" : "none";
-  });
 
   $("s-avatar-input").addEventListener("change", async (e) => {
     const file = e.target.files[0];
@@ -3084,48 +3252,90 @@ function setupEventListeners() {
     panel.classList.toggle("hidden");
     if (!panel.classList.contains("hidden")) renderJrpgNpcPanel();
   });
+  //260601 Red 导入角色列表渲染
+  function renderImportList() {
+    const list = $("rpg-import-list");
+    if (!list) return;
+    const library = state.config.jrpg_npc_library || {};
+    const names = Object.keys(library);
+    list.innerHTML = "";
+    if (names.length === 0) {
+      list.innerHTML = '<span style="font-size:11px;color:var(--text-tertiary)">暂无已保存角色</span>';
+      return;
+    }
+    names.forEach(name => {
+      const npc = library[name];
+      const btn = document.createElement("button");
+      btn.className = "rpg-import-btn";
+      btn.textContent = `${ELEMENT_EMOJI[npc.element] || "?"} ${name}`;
+      btn.title = `${npc.role || ""} · ${npc.personality || ""}`;
+      btn.addEventListener("click", () => {
+        $("rpg-char-name").value = name;
+        document.querySelectorAll(".rpg-element-btn").forEach(b => {
+          b.classList.toggle("active", b.dataset.element === npc.element);
+        });
+      });
+      list.appendChild(btn);
+    });
+  }
   $("rpg-setup-btn").addEventListener("click", () => {
     const c = state.rpgChar;
     const social = state.jrpgSocial;
-    $("rpg-world-dir").value   = state.rpgWorldDir;
     $("rpg-char-name").value   = c.name;
-    $("rpg-char-class").value  = c.class || "";
-    $("rpg-char-bg").value     = c.background;
-    $("rpg-str").value = c.str; $("rpg-agi").value = c.agi;
-    $("rpg-int").value = c.int; $("rpg-vit").value = c.vit;
+    //260601 Red 高亮当前选择的元素
+    document.querySelectorAll(".rpg-element-btn").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.element === c.element);
+    });
+    $("rpg-str").value = c.str; $("rpg-mag").value = c.mag;
+    $("rpg-spd").value = c.spd; $("rpg-def").value = c.def;
+    $("rpg-sta").value = c.sta;
     $("rpg-virtue").value = social.德行;
     $("rpg-intel").value  = social.智识;
     $("rpg-body").value   = social.体魄;
     $("rpg-charm").value  = social.魅力;
+    renderImportList();
     $("rpg-setup-overlay").classList.add("open");
+  });
+  //260601 Red 元素选择按钮点击
+  document.querySelectorAll(".rpg-element-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".rpg-element-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+    });
   });
   $("rpg-setup-cancel").addEventListener("click", () => $("rpg-setup-overlay").classList.remove("open"));
   $("rpg-setup-confirm").addEventListener("click", () => {
-    state.rpgWorldDir = $("rpg-world-dir").value.trim();
-    const gi = id => parseInt($(id).value) || 10;
+    //260601 Red 角色名必填校验
+    const charName = $("rpg-char-name").value.trim();
+    if (!charName) {
+      showToast("请输入角色名");
+      $("rpg-char-name").focus();
+      return;
+    }
+    const activeEl = document.querySelector(".rpg-element-btn.active");
+    const element = activeEl ? activeEl.dataset.element : "fire";
+    const gi = id => Math.min(100, Math.max(1, parseInt($(id).value) || 1));
     state.rpgChar = {
-      name:       $("rpg-char-name").value.trim(),
-      class:      $("rpg-char-class").value,
-      background: $("rpg-char-bg").value.trim(),
-      str: gi("rpg-str"), agi: gi("rpg-agi"),
-      int: gi("rpg-int"), vit: gi("rpg-vit"),
+      name:    charName,
+      element: element,
+      str: gi("rpg-str"), mag: gi("rpg-mag"),
+      spd: gi("rpg-spd"), def: gi("rpg-def"),
+      sta: gi("rpg-sta"),
     };
-    // 新社交属性：德智体美
     state.jrpgSocial = {
-      德行: parseInt($("rpg-virtue").value)||5,
-      智识: parseInt($("rpg-intel").value)||5,
-      体魄: parseInt($("rpg-body").value)||5,
-      魅力: parseInt($("rpg-charm").value)||5,
+      德行: Math.min(50, Math.max(1, parseInt($("rpg-virtue").value)||1)),
+      智识: Math.min(50, Math.max(1, parseInt($("rpg-intel").value)||1)),
+      体魄: Math.min(50, Math.max(1, parseInt($("rpg-body").value)||1)),
+      魅力: Math.min(50, Math.max(1, parseInt($("rpg-charm").value)||1)),
     };
-    // 根据体质计算初始 HP/MP
+    //260601 Red HP 基于体力，MP 基于魔力
     state.rpgStatus = {
-      hp: 80 + state.rpgChar.vit * 2,
-      hpMax: 80 + state.rpgChar.vit * 2,
-      mp: 30 + state.rpgChar.int * 2,
-      mpMax: 30 + state.rpgChar.int * 2,
+      hp: 30 + state.rpgChar.sta * 5,
+      hpMax: 30 + state.rpgChar.sta * 5,
+      mp: 10 + state.rpgChar.mag * 3,
+      mpMax: 10 + state.rpgChar.mag * 3,
       lv: 1, exp: 0, expNext: 100, gold: 50
     };
-    // 初始化JRPG NPC列表
     initJrpgGame();
     updateRpgStatusBar();
     $("rpg-setup-overlay").classList.remove("open");
@@ -3153,34 +3363,15 @@ function setupEventListeners() {
     renderTemplateSelect();
     const tpl = state.activeTemplate ? (state.config.templates || {})[state.activeTemplate] : null;
     $("ns-hero-name").value  = state.novelHeroName || tpl?.default_hero || state.config.default_hero_name || "林然";
-    $("ns-story-dir").value  = state.novelStoryDir || "";
-    autoResizeTextarea($("ns-story-dir"));
     $("ns-pov").value = state.novelPov || tpl?.default_pov || "third";
     $("ns-word-count").value   = state.novelWordCount || tpl?.default_words || 200;
-    $("ns-start-fav").value    = state.novelFav || 0;
-    $("ns-fav-enabled").checked = state.novelFavEnabled !== false;
-    renderNovelStages();
     $("novel-setup-overlay").classList.add("open");
-    setTimeout(() => autoResizeTextarea($("ns-story-dir")), 0);
   });
-  // 添加阶段按钮
-  $("ns-stage-add").addEventListener("click", () => {
-    const last = state.novelStages[state.novelStages.length - 1];
-    const newCap = last ? last.cap + 30 : 30;
-    state.novelStages.push({
-      name: `阶段${state.novelStages.length + 1}`,
-      cap: Math.min(newCap, 999),
-      rule: ""
-    });
-    renderNovelStages();
-  });
-  $("ns-story-dir").addEventListener("input", () => autoResizeTextarea($("ns-story-dir")));
   $("novel-setup-cancel").addEventListener("click", () => {
     $("novel-setup-overlay").classList.remove("open");
   });
   $("novel-setup-confirm").addEventListener("click", () => {
     state.novelHeroName    = $("ns-hero-name").value.trim() || state.config.default_hero_name || "林然";
-    state.novelStoryDir    = $("ns-story-dir").value.trim();
     state.novelPov         = $("ns-pov").value;
     state.novelWordCount   = parseInt($("ns-word-count").value) || 200;
     // 从动态表格读取阶段
@@ -3206,10 +3397,8 @@ function setupEventListeners() {
     $("novel-setup-overlay").classList.remove("open");
 
     const heroine = (state.config.novel_heroines || {})[state.novelHeroine];
-    const opening = heroine?.opening?.trim();
-    if (opening) {
+    if (heroine) {
       newChat();
-      setTimeout(() => injectOpeningMessage(opening), 50);
     }
   });
   $("hc-cancel").addEventListener("click", () => $("heroine-card-overlay").classList.remove("open"));
@@ -3243,6 +3432,7 @@ function setupEventListeners() {
   $("prompt-form-save").addEventListener("click", saveNewPrompt);
 
   setupResizeHandles();
+} catch(e) { console.error("setupEventListeners error:", e); }
 }
 
 // ─── 启动 ────────────────────────────────────────────────────────────────────
